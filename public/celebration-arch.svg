@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="720" viewBox="0 0 640 720" fill="none" role="img" aria-labelledby="arch-title arch-description">
+  <title id="arch-title">A celebration, on paper</title>
+  <desc id="arch-description">Original decorative illustration of a wedding arch, draped fabric, flowers and foliage. This is not a photograph or a depiction of a real venue.</desc>
+  <path d="M58 650V296a262 262 0 0 1 524 0v354Z" fill="#e7e9df"/>
+  <path d="M89 650V298a231 231 0 0 1 462 0v352Z" stroke="#acb5a2"/>
+  <path d="M107 650V301a213 213 0 0 1 426 0v349Z" stroke="#acb5a2"/>
+  <ellipse cx="320" cy="663" rx="279" ry="26" fill="#dfd5c8"/>
+  <path d="M152 611V299a168 168 0 0 1 336 0v312Z" fill="#d5bdac"/>
+  <path d="M173 611V301a147 147 0 0 1 294 0v310Z" fill="#f4ebdf"/>
+  <path d="M203 611V305a117 117 0 0 1 234 0v306Z" fill="#694b5c"/>
+  <path d="M220 611V307a100 100 0 0 1 200 0v304Z" stroke="#ad8b99"/>
+  <path d="M236 611V307a84 84 0 0 1 168 0v304" stroke="#ad8b99"/>
+  <path d="M187 277c50-4 91-24 132-66-8 102-47 162-116 201-15-43-20-87-16-135Z" fill="#efe0ce"/>
+  <path d="M453 277c-51-4-92-24-133-66 8 102 47 162 116 201 15-43 20-87 17-135Z" fill="#efe0ce"/>
+  <path d="M319 216c-20 82-66 135-117 169m118-169c20 82 66 135 117 169" stroke="#cfb6a0" stroke-width="2"/>
+  <path d="m203 407-20 205h58l-17-206m211 1 20 205h-58l17-206" fill="#ebdac5"/>
+  <path d="m212 427-12 184m228-184 12 184" stroke="#cfb6a0" stroke-width="2"/>
+  <path d="M198 407h31m181 0h31" stroke="#a67a58" stroke-width="5"/>
+  <path d="M321 95v38M321 134v43" stroke="#a67a58" stroke-width="1.5"/>
+  <path d="M321 103c-22 5-31 24 0 38 31-14 22-33 0-38Z" fill="#e1c4a1" stroke="#a67a58"/>
+  <path d="m311 156 10-14 10 14-10 14Z" fill="#a67a58"/>
+  <path d="M321 184v19m-9-9h18" stroke="#e1c4a1" stroke-width="2"/>
+  <path d="M79 242c43-17 54-79 92-95 28-13 63-15 92-37m300 132c-43-17-54-79-92-95-28-13-63-15-92-37" stroke="#718169" stroke-width="2"/>
+  <g fill="#718169">
+    <ellipse cx="114" cy="212" rx="10" ry="26" transform="rotate(-46 114 212)"/>
+    <ellipse cx="132" cy="179" rx="10" ry="24" transform="rotate(10 132 179)"/>
+    <ellipse cx="164" cy="160" rx="9" ry="24" transform="rotate(-57 164 160)"/>
+    <ellipse cx="204" cy="144" rx="9" ry="22" transform="rotate(27 204 144)"/>
+    <ellipse cx="526" cy="212" rx="10" ry="26" transform="rotate(46 526 212)"/>
+    <ellipse cx="508" cy="179" rx="10" ry="24" transform="rotate(-10 508 179)"/>
+    <ellipse cx="476" cy="160" rx="9" ry="24" transform="rotate(57 476 160)"/>
+    <ellipse cx="436" cy="144" rx="9" ry="22" transform="rotate(-27 436 144)"/>
+  </g>
+  <g fill="#bd8c70">
+    <circle cx="154" cy="171" r="11"/><circle cx="169" cy="181" r="9"/><circle cx="148" cy="187" r="9"/>
+    <circle cx="486" cy="171" r="11"/><circle cx="471" cy="181" r="9"/><circle cx="492" cy="187" r="9"/>
+    <circle cx="232" cy="126" r="8"/><circle cx="408" cy="126" r="8"/>
+  </g>
+  <g fill="#ebd3b4">
+    <circle cx="174" cy="156" r="10"/><circle cx="182" cy="170" r="8"/><circle cx="191" cy="156" r="8"/>
+    <circle cx="466" cy="156" r="10"/><circle cx="458" cy="170" r="8"/><circle cx="449" cy="156" r="8"/>
+  </g>
+  <path d="M154 610h332v18H154Zm-21 18h374v18H133Zm-23 18h420v17H110Z" fill="#c7ac94"/>
+  <path d="M154 628h332m-353 18h374" stroke="#ac8970"/>
+  <path d="M264 546v-45a24 24 0 0 1 48 0v45m18 0v-45a24 24 0 0 1 48 0v45" stroke="#e7ccaa" stroke-width="4"/>
+  <path d="M255 545h66v12h-66Zm66 0h66v12h-66Z" fill="#dec09e"/>
+  <path d="m267 557-7 44m49-44 7 44m17-44-7 44m49-44 7 44" stroke="#dec09e" stroke-width="4"/>
+  <path d="M123 617c-7-71-45-117-36-181m32 136c25-27 28-58 21-78m-33 40c-29-13-47-39-47-64" stroke="#54675a" stroke-width="2"/>
+  <path d="M87 477c-28-1-46-21-44-44 28 1 43 18 44 44Zm5 24c25-13 34-36 25-57-25 13-32 31-25 57Zm18 42c-26 1-49-13-53-36 26-4 46 11 53 36Zm14 24c28-8 42-27 38-50-28 6-39 24-38 50Z" fill="#718169"/>
+  <path d="M87 446c-12-25-9-50 5-63 14 22 11 47-5 63Z" fill="#54675a"/>
+  <path d="M95 612h53l-7 48h-39Z" fill="#9b654f"/>
+  <path d="M95 620h53" stroke="#c99a80"/>
+  <path d="M517 617c7-71 45-117 36-181m-32 136c-25-27-28-58-21-78m33 40c29-13 47-39 47-64" stroke="#54675a" stroke-width="2"/>
+  <path d="M553 477c28-1 46-21 44-44-28 1-43 18-44 44Zm-5 24c-25-13-34-36-25-57 25 13 32 31 25 57Zm-18 42c26 1 49-13 53-36-26-4-46 11-53 36Zm-14 24c-28-8-42-27-38-50 28 6 39 24 38 50Z" fill="#718169"/>
+  <path d="M553 446c12-25 9-50-5-63-14 22-11 47 5 63Z" fill="#54675a"/>
+  <path d="M492 612h53l-7 48h-39Z" fill="#9b654f"/>
+  <path d="M492 620h53" stroke="#c99a80"/>
+  <path d="M40 663h560" stroke="#b6a18c"/>
+  <path d="m48 353 5-10 5 10-5 10Zm534-45 5-10 5 10-5 10Z" fill="#b5916e"/>
+  <text x="320" y="705" text-anchor="middle" fill="#694b5c" font-family="sans-serif" font-size="10" letter-spacing="1">ORIGINAL ILLUSTRATION · NOT A VENUE PHOTOGRAPH</text>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-labelledby="favicon-title favicon-description">
+  <title id="favicon-title">Shagun</title>
+  <desc id="favicon-description">Original decorative arch and four-point star. An illustration, not a venue photograph.</desc>
+  <rect width="64" height="64" rx="15" fill="#faf7f2"/>
+  <path d="M13 52V31a19 19 0 0 1 38 0v21" fill="#e6eae1" stroke="#54675a" stroke-width="2"/>
+  <path d="M21 52V32a11 11 0 0 1 22 0v20" fill="#faf7f2" stroke="#694b5c" stroke-width="2"/>
+  <path d="m32 29 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z" fill="#9b654f"/>
+  <path d="M10 53h44" stroke="#694b5c" stroke-width="3" stroke-linecap="round"/>
+</svg>

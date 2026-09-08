@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Checks and isolated browser QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_PUBLIC_SITE_URL: http://localhost:3100
+      NEXT_PUBLIC_SUPABASE_URL: ""
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+      RATE_LIMIT_SECRET: ""
+      NEXT_PUBLIC_ANALYTICS_ENABLED: "false"
+      NEXT_PUBLIC_CONTACT_EMAIL: ""
+      SHAGUN_TEST_FIXTURES: "false"
+      VERCEL: ""
+      VERCEL_ENV: ""
+    steps:
+      - name: Check out source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint, typecheck and run Vitest
+        run: npm run check
+
+      - name: Build production application with local-only fixtures
+        run: npm run build:qa
+        env:
+          SHAGUN_TEST_FIXTURES: "true"
+
+      - name: Install Chromium and Linux browser dependencies
+        run: npx playwright install --with-deps chromium
+
+      # Playwright owns next start on localhost:3100; never use a live database.
+      - name: Test the fixture-only production server
+        run: npm run test:e2e -- --reporter=line,html
+        env:
+          SHAGUN_TEST_FIXTURES: "true"
+          PLAYWRIGHT_HTML_OPEN: never
+
+      - name: Upload browser failure report and results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

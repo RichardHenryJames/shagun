@@ -1,0 +1,152 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Shagun: Local app preview",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"start",
+				"--",
+				"--hostname",
+				"localhost"
+			],
+			"options": {
+				"env": {
+					"SHAGUN_TEST_FIXTURES": "false"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Verify",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"check"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Inspect shared database",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"--use-system-ca",
+				"./node_modules/tsx/dist/cli.mjs",
+				"scripts/db-migrate.ts",
+				"--source-env",
+				"../biharibhojan/.env",
+				"--expected-project-ref",
+				"ixkhyqqovacdramymqjk"
+			],
+			"options": {
+				"env": {
+					"NODE_EXTRA_CA_CERTS": "${workspaceFolder}/.qa/supabase-production-ca.crt"
+				}
+			},
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Download public database CA",
+			"type": "shell",
+			"command": "Invoke-WebRequest",
+			"args": [
+				"-Uri",
+				"https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt",
+				"-OutFile",
+				".qa/supabase-production-ca.crt"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Diagnose database permissions",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"--use-system-ca",
+				"./node_modules/tsx/dist/cli.mjs",
+				"scripts/db-access-inspect.ts",
+				"--source-env",
+				"../biharibhojan/.env",
+				"--expected-project-ref",
+				"ixkhyqqovacdramymqjk"
+			],
+			"options": {
+				"env": {
+					"NODE_EXTRA_CA_CERTS": "${workspaceFolder}/.qa/supabase-production-ca.crt"
+				}
+			},
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Stop demo preview",
+			"type": "shell",
+			"command": "$listeners = @(Get-NetTCPConnection -LocalPort 3100 -State Listen -ErrorAction SilentlyContinue); foreach ($ownerId in @($listeners.OwningProcess | Sort-Object -Unique)) { $process = Get-CimInstance Win32_Process -Filter \"ProcessId=$ownerId\"; $parent = Get-CimInstance Win32_Process -Filter \"ProcessId=$($process.ParentProcessId)\"; if (($process.CommandLine + ' ' + $parent.CommandLine) -match '(?i)shagun.*(next|qa\\.ts)' -and ($process.CommandLine + ' ' + $parent.CommandLine) -match '(?i)(3100|qa\\.ts\\s+start)') { Stop-Process -Id $ownerId; Write-Output 'Stopped the Shagun demo preview.' } else { throw 'Port 3100 is owned by a process that could not be confirmed as the Shagun demo preview; it was left untouched.' } }",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Build app preview",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"options": {
+				"env": {
+					"SHAGUN_TEST_FIXTURES": "false"
+				}
+			},
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Release safety check",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				".qa/release-preflight.mjs"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Check catalog syntax",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				".qa/catalog-syntax.mjs"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Check Git account availability",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"credential-manager",
+				"github",
+				"list"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Commit reviewed app",
+			"type": "shell",
+			"command": "node .qa/release-preflight.mjs; if ($LASTEXITCODE -ne 0) { throw 'Release safety check failed.' }; if (@(git remote).Count -eq 0) { git remote add origin https://github.com/RichardHenryJames/shagun; if ($LASTEXITCODE -ne 0) { throw 'Remote setup failed.' } }; if ((git remote get-url origin).Trim() -ne 'https://github.com/RichardHenryJames/shagun') { throw 'Unexpected remote; nothing committed.' }; git add -- .; if ($LASTEXITCODE -ne 0) { throw 'Staging failed.' }; git diff --cached --check; if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed.' }; git branch -m main; if ($LASTEXITCODE -ne 0) { throw 'Branch setup failed.' }; git commit -m 'Build city-first Shagun directory with source-cited Hazaribag research'; if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }; git status --short --branch",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

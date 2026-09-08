@@ -1,0 +1,717 @@
+{
+  "city": {
+    "name": "Hazaribag",
+    "slug": "hazaribag",
+    "state": "Jharkhand",
+    "country": "India",
+    "description": "Hazaribag is a city in Jharkhand, India.",
+    "seo_title": "Wedding Venues in Hazaribag, Jharkhand | Shagun",
+    "seo_description": "Wedding venue information for Hazaribag, Jharkhand, covering banquet halls, hotels and resorts."
+  },
+  "researched_on": "2026-09-08",
+  "method": "Manual review of publicly accessible venue websites and business pages; no phone/site visit confirmation",
+  "venues": [
+    {
+      "slug": "tilak-baag",
+      "name": "Tilak Baag",
+      "venue_type": "banquet_hall",
+      "locality": "Kumhartoli",
+      "address": "Opposite Railway Station, Near Gandhi Smarak, Kumhartoli, Par Nala, Hazaribag, Jharkhand 825301",
+      "description": "Tilak Baag in Kumhartoli has banquet halls, a lawn, guest rooms and cottages. Ask the venue about the event layout and generator fuel arrangements.",
+      "phone": "+917717755857",
+      "alternate_phone": null,
+      "whatsapp": null,
+      "email": "tilak.baag@gmail.com",
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": ["ac", "rooms", "parking", "kitchen", "power_backup"],
+      "website_url": "https://www.tilakbaag.com/",
+      "gallery_url": "https://www.tilakbaag.com/image-gallery.html",
+      "sources": [
+        {
+          "url": "https://www.tilakbaag.com/contact-us.html",
+          "publisher": "Tilak Baag",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Lists the address as Opposite Railway Station, Near Gandhi Smarak, Kumhartoli, Par Nala, Hazaribag, Jharkhand 825301.",
+            "Publishes the business phone +917717755857 and email tilak.baag@gmail.com."
+          ]
+        },
+        {
+          "url": "https://www.tilakbaag.com/facilities.html",
+          "publisher": "Tilak Baag",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Describes halls, a lawn, guest rooms and cottages.",
+            "Lists owned parking and kitchens.",
+            "Lists a generator without diesel."
+          ]
+        },
+        {
+          "url": "https://www.tilakbaag.com/banquet-hall-ac.html",
+          "publisher": "Tilak Baag",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Advertises an air-conditioned banquet hall."
+          ]
+        }
+      ],
+      "review_notes": [
+        "No telephone, WhatsApp or site-visit confirmation was performed; the supplied web review is not contact verification.",
+        "The generator is listed without diesel. Fuel charges, operating arrangements and event inclusions need direct confirmation.",
+        "An ambiguous 1,000-person claim and a reference to 100 sofa seats do not establish a banquet-hall maximum. Both capacity fields remain null.",
+        "The image-gallery URL is a reference page only; no photo permission has been obtained and no images are included."
+      ],
+      "ready_for_editorial_review": true,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "the-floresta-hotels-and-banquets",
+      "name": "The Floresta Hotels & Banquets",
+      "venue_type": "hotel",
+      "locality": "New Forest Colony",
+      "address": "Carmel School Road, Adjacent to Forest Residency, New Forest Colony, Hazaribag, Jharkhand 825301",
+      "description": "The Floresta Hotels & Banquets in New Forest Colony combines hotel accommodation with banquet spaces. Its website describes a banquet hall with a lawn and catering options for events.",
+      "phone": "+919955119221",
+      "alternate_phone": null,
+      "whatsapp": "+919955119221",
+      "email": "hotelthefloresta@gmail.com",
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": ["parking", "rooms", "catering"],
+      "website_url": "https://www.theflorestahotelsandbanquets.com/",
+      "gallery_url": "https://www.theflorestahotelsandbanquets.com/gallery",
+      "sources": [
+        {
+          "url": "https://www.theflorestahotelsandbanquets.com/contact-us",
+          "publisher": "The Floresta Hotels & Banquets",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Lists the address as Carmel School Road, Adjacent to Forest Residency, New Forest Colony, Hazaribag, Jharkhand 825301.",
+            "Publishes +919955119221 and hotelthefloresta@gmail.com.",
+            "Provides an explicit WhatsApp link to https://wa.me/919955119221."
+          ]
+        },
+        {
+          "url": "https://www.theflorestahotelsandbanquets.com/",
+          "publisher": "The Floresta Hotels & Banquets",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Advertises 23 hotel rooms."
+          ]
+        },
+        {
+          "url": "https://www.theflorestahotelsandbanquets.com/banquet-hall-souvenir",
+          "publisher": "The Floresta Hotels & Banquets",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Uses the heading Grand Banquet Hall with Lawn.",
+            "Describes wedding use, parking and a pool."
+          ]
+        },
+        {
+          "url": "https://www.theflorestahotelsandbanquets.com/banquet-hall-medium",
+          "publisher": "The Floresta Hotels & Banquets",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Uses the heading Souvenir and describes catering options."
+          ]
+        }
+      ],
+      "review_notes": [
+        "Homepage and banquet-page capacity claims conflict: 1,000 versus 700 guests. Neither is adopted; confirm the specific hall, lawn and event layout.",
+        "The banquet-hall-souvenir path is headed Grand Banquet Hall with Lawn, while banquet-hall-medium uses Souvenir. These are spaces at one property, not separate venue records.",
+        "No air-conditioning flag is inferred from the hotel classification. A pool is mentioned in the source but is not an available facility enum.",
+        "The explicit WhatsApp link establishes a published contact channel, not that anyone was contacted or the number is currently operational.",
+        "The gallery link grants no image rights; photos remain empty."
+      ],
+      "ready_for_editorial_review": true,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "hotel-aranya-vihar",
+      "name": "Hotel Aranya Vihar",
+      "venue_type": "hotel",
+      "locality": "Hearngunj",
+      "address": "Sheetal Kunj, Hearngunj, Hazaribagh, Jharkhand 825303",
+      "description": "Hotel Aranya Vihar in Hearngunj offers air-conditioned rooms and banquet halls. Its Victoria space is described for wedding receptions with food service.",
+      "phone": "+917479655611",
+      "alternate_phone": null,
+      "whatsapp": "+917479655611",
+      "email": null,
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": ["ac", "rooms", "power_backup", "catering"],
+      "website_url": "https://hotelaranyavihar.com/",
+      "gallery_url": "https://hotelaranyavihar.com/gallery/",
+      "sources": [
+        {
+          "url": "https://hotelaranyavihar.com/contact-us/",
+          "publisher": "Hotel Aranya Vihar",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Lists the address as Sheetal Kunj, Hearngunj, Hazaribagh, Jharkhand 825303.",
+            "Publishes +917479655611 and an explicit WhatsApp link for the same number.",
+            "Displays mbkhresort@gmail.com, while the email link targets info@hotelaranyavihar.com."
+          ]
+        },
+        {
+          "url": "https://hotelaranyavihar.com/",
+          "publisher": "Hotel Aranya Vihar",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Advertises air-conditioned rooms and banquet halls.",
+            "Advertises 24-hour power backup and in-house food."
+          ]
+        },
+        {
+          "url": "https://hotelaranyavihar.com/victoria/",
+          "publisher": "Hotel Aranya Vihar",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Describes wedding receptions with food service in the Victoria space."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The displayed email and mailto destination conflict. The public-eligible email field remains null until management confirms the appropriate address.",
+        "The AC flag is supported by the accommodation description; cooling and power-backup arrangements for the selected event hall still need confirmation.",
+        "No venue-capacity figure is established by the supplied review. Hotel room tariffs are not venue prices and are not imported.",
+        "The listed telephone and explicit WhatsApp link were not contacted. The gallery is a source reference, not permission to reuse photos."
+      ],
+      "ready_for_editorial_review": true,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "ananta-by-the-hill",
+      "name": "Ananta - By The Hill",
+      "venue_type": "resort",
+      "locality": "Canary Hill Road",
+      "address": "Near Krishi Vigyan Kendra, Canary Hill Road, Hazaribagh, Jharkhand",
+      "description": "Ananta - By The Hill is a resort on Canary Hill Road with indoor and outdoor banquet spaces and lawns for weddings. The property also advertises rooms, a pool and a restaurant.",
+      "phone": "+919942631802",
+      "alternate_phone": null,
+      "whatsapp": "+919942631802",
+      "email": "abthmanagement@gmail.com",
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": ["rooms"],
+      "website_url": "https://anantabythehill.com/",
+      "gallery_url": "https://anantabythehill.com/experiences",
+      "sources": [
+        {
+          "url": "https://anantabythehill.com/contact",
+          "publisher": "Ananta - By The Hill",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Lists the address as Near Krishi Vigyan Kendra, Canary Hill Road, Hazaribagh, Jharkhand.",
+            "Publishes +919942631802 and abthmanagement@gmail.com.",
+            "Provides an explicit WhatsApp link for +919942631802."
+          ]
+        },
+        {
+          "url": "https://anantabythehill.com/experiences",
+          "publisher": "Ananta - By The Hill",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Describes indoor and outdoor banquet spaces and lawns for weddings.",
+            "Advertises a pool and restaurant."
+          ]
+        },
+        {
+          "url": "https://anantabythehill.com/rooms",
+          "publisher": "Ananta - By The Hill",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Advertises rooms at the property."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The supplied primary address has no PIN code; no postal code or map coordinates have been inferred.",
+        "The separate home-delivery contact is excluded from alternate_phone because it is not established as a venue-events contact.",
+        "A restaurant does not establish event catering, and an air-conditioned bar does not establish an air-conditioned hall. Only rooms are recorded as an enum facility.",
+        "No capacity, event tariff or contact confirmation is established by the supplied review.",
+        "gallery_url points to the supplied experiences page, not a photo asset or a grant of photo permission."
+      ],
+      "ready_for_editorial_review": true,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "hotel-hill-side",
+      "name": "Hotel Hill Side",
+      "venue_type": "hotel",
+      "locality": "Dipugarha",
+      "address": "Near Dipugarha, Hazaribagh, Jharkhand 825301",
+      "description": "Hotel Hill Side is a hotel near Dipugarha in Hazaribagh. Its website advertises rooms and a wedding banquet venue.",
+      "phone": "+917992392177",
+      "alternate_phone": null,
+      "whatsapp": "+917992392177",
+      "email": "hotelhillsidehaz@gmail.com",
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": ["rooms"],
+      "website_url": "https://thehotelhillside.in/",
+      "gallery_url": "https://thehotelhillside.in/",
+      "sources": [
+        {
+          "url": "https://thehotelhillside.in/",
+          "publisher": "Hotel Hill Side",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Identifies Hotel Hill Side, advertises rooms and describes a wedding banquet venue.",
+            "Lists the address as Near Dipugarha, Hazaribagh, Jharkhand 825301.",
+            "Publishes +917992392177 and hotelhillsidehaz@gmail.com.",
+            "Links its business booking contact to api.whatsapp.com for +917992392177."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The source provides a locality-level address, not a complete street or entrance description. No fuller address is inferred from a PDF or other material.",
+        "Generic travel-template image text and room ratings are not adopted as venue facts. Room prices are not event prices.",
+        "No gallery anchor was confirmed in the supplied evidence, so gallery_url conservatively uses the homepage rather than an assumed fragment.",
+        "The business telephone and explicit WhatsApp link have not been contacted. No photo rights are established."
+      ],
+      "ready_for_editorial_review": true,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "hotel-sunshine-heritage",
+      "name": "Hotel Sunshine Heritage",
+      "venue_type": "hotel",
+      "locality": "Railway station area",
+      "address": "Near Kud railway station, Hazaribagh, Jharkhand 825302",
+      "description": "Hotel Sunshine Heritage is a hotel near the railway station area in Hazaribagh. Its website advertises three halls, ten rooms, a garden and parking.",
+      "phone": "+919431141084",
+      "alternate_phone": "+918709822355",
+      "whatsapp": "+918709822355",
+      "email": "hotelsunshineheritage@gmail.com",
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": ["rooms", "parking"],
+      "website_url": "https://www.hotelsunshineheritage.in/",
+      "gallery_url": "https://www.hotelsunshineheritage.in/gallery/",
+      "sources": [
+        {
+          "url": "https://www.hotelsunshineheritage.in/contact-us/",
+          "publisher": "Hotel Sunshine Heritage",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Publishes business phones +919431141084 and +918709822355.",
+            "Publishes hotelsunshineheritage@gmail.com.",
+            "Displays a WhatsApp link using wa.me/8709822355, matching the second business number but omitting the country code."
+          ]
+        },
+        {
+          "url": "https://www.hotelsunshineheritage.in/",
+          "publisher": "Hotel Sunshine Heritage",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Gives a location near Kud railway station in Hazaribagh, Jharkhand 825302 and also references Hazaribagh Town station.",
+            "Advertises three halls, ten rooms, a garden and parking."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The supplied review mentions both Kud railway station and Hazaribagh Town station. Keep the recorded landmark address and confirm the actual entrance; do not invent a street.",
+        "The displayed WhatsApp destination omits +91. The recorded +918709822355 is the normalized Indian business number, supported by the explicit link and matching alternate phone; successful message delivery is not verified.",
+        "A wedding-service page flagged in the supplied review uses the name Rana Palace. Its claims are excluded and that identity has not been merged with Hotel Sunshine Heritage.",
+        "Hall and room counts are not event-capacity figures. All capacity and price fields remain null.",
+        "Contacts have not been confirmed by call or message, and no gallery photo permission has been obtained."
+      ],
+      "ready_for_editorial_review": true,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "mehfil-banquet",
+      "name": "Mehfil Banquet",
+      "venue_type": "banquet_hall",
+      "locality": "Sindoor",
+      "address": "Bali Complex, Near Royal Enfield Showroom, V.B.U., Sindoor, NH-33, Hazaribag, Jharkhand 825301",
+      "description": "Mehfil Banquet in Sindoor offers air-conditioned party and dining halls for events. Its website lists food options, decoration, parking and generator backup.",
+      "phone": "+918527131889",
+      "alternate_phone": null,
+      "whatsapp": null,
+      "email": "surendramehta35@yahoo.co.in",
+      "capacity_min": null,
+      "capacity_max": 275,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": ["ac", "parking", "catering", "decoration", "power_backup"],
+      "website_url": "https://mehfilbanquet.com/",
+      "gallery_url": "https://mehfilbanquet.com/#gallery-mehfil-banquet-in-hazaribagh",
+      "sources": [
+        {
+          "url": "https://mehfilbanquet.com/",
+          "publisher": "Mehfil Banquet",
+          "kind": "venue_website",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Lists the address as Bali Complex, Near Royal Enfield Showroom, V.B.U., Sindoor, NH-33, Hazaribag, Jharkhand 825301.",
+            "Publishes +918527131889 and surendramehta35@yahoo.co.in.",
+            "Describes fully air-conditioned party and dining halls and space for up to 275 guests, without a defined seating layout.",
+            "Lists parking for 20 cars and 50 bikes.",
+            "Describes with-food and without-food arrangements, decoration and a generator.",
+            "Mentions a 2BHK rest space and an undated conditional tariff."
+          ]
+        }
+      ],
+      "review_notes": [
+        "capacity_max of 275 is the website's generic guest-capacity claim, not confirmed seated capacity, an event-specific layout or a certified occupancy limit. No minimum is established.",
+        "The website shows an undated INR 15,000-20,000 tariff with conditions. Its current applicability, price basis and inclusions are unconfirmed; price_min, price_max and price_type all remain null.",
+        "The 2BHK rest space is not sufficient evidence of guest-room accommodation, so rooms is not recorded as a facility.",
+        "No explicit WhatsApp evidence was supplied for the phone. Business contacts and event arrangements still need direct confirmation.",
+        "The gallery fragment is a reference to the venue page only; no images are downloaded or licensed for this catalogue."
+      ],
+      "ready_for_editorial_review": true,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "shubh-shambhu-banquet-hall",
+      "name": "Shubh Shambhu Banquet Hall",
+      "venue_type": "banquet_hall",
+      "locality": "Lower Malviya Marg",
+      "address": "Lower Malviya Marg, near Bara Akhara Chowk, Hazaribagh, Jharkhand",
+      "description": "Shubh Shambhu Banquet Hall is a banquet venue on Lower Malviya Marg near Bara Akhara Chowk in Hazaribagh.",
+      "phone": "+919031163006",
+      "alternate_phone": null,
+      "whatsapp": null,
+      "email": null,
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": [],
+      "website_url": "https://www.facebook.com/shubhshambhubanquethall.in/",
+      "gallery_url": "https://www.facebook.com/shubhshambhubanquethall.in/photos",
+      "sources": [
+        {
+          "url": "https://www.facebook.com/shubhshambhubanquethall.in/",
+          "publisher": "Shubh Shambhu Banquet Hall",
+          "kind": "business_page",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Identifies Shubh Shambhu Banquet Hall in Hazaribagh.",
+            "Lists Lower Malviya Marg, near Bara Akhara Chowk, Hazaribagh, Jharkhand.",
+            "Publishes the business phone +919031163006."
+          ]
+        },
+        {
+          "url": "https://www.mandap.com/hazaribag/shubh-shambhu-banquet-hall-in-hazaribag",
+          "publisher": "Mandap.com",
+          "kind": "directory",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Corroborates the venue identity and Lower Malviya Marg location.",
+            "Adds postal code 825301, which is not included in the supplied primary-page address."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The business page was readable in the initial supplied review but showed a login wall on a later supplied check. Availability varies; an editor must revisit accessible primary evidence without bypassing access controls.",
+        "The phone is retained from the supplied primary-page review, not from the directory. Its freshness and the street address need direct reconfirmation before the record advances.",
+        "Conflicting establishment-year claims are omitted. The directory-only postal code is not added to the primary address.",
+        "No facilities, capacities, event prices or WhatsApp support are established. Empty facilities means unrecorded, not absent.",
+        "The Facebook photos link may require login and does not establish permission to reuse any image."
+      ],
+      "ready_for_editorial_review": false,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "dikshits-grand",
+      "name": "Dikshit's Grand",
+      "venue_type": "banquet_hall",
+      "locality": "Ravindra Path",
+      "address": "Behind Dikshit Agencies, Ravindra Path, near Mission Hospital, Hazaribagh, Jharkhand",
+      "description": "Dikshit's Grand is a banquet venue on Ravindra Path behind Dikshit Agencies near Mission Hospital. Its business page advertises wedding and anniversary events.",
+      "phone": "+919431798624",
+      "alternate_phone": null,
+      "whatsapp": null,
+      "email": null,
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": [],
+      "website_url": "https://www.facebook.com/DikshitsGrandbanquethall/",
+      "gallery_url": "https://www.facebook.com/DikshitsGrandbanquethall/photos",
+      "sources": [
+        {
+          "url": "https://www.facebook.com/DikshitsGrandbanquethall/",
+          "publisher": "Dikshit's Grand",
+          "kind": "business_page",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Identifies Dikshit's Grand as a venue for weddings and anniversaries.",
+            "Lists Behind Dikshit Agencies, Ravindra Path, near Mission Hospital, Hazaribagh, Jharkhand.",
+            "Publishes the business phone +919431798624."
+          ]
+        },
+        {
+          "url": "https://www.mandap.com/hazaribag/dikshits-grand-marriage-and-banquet-hall-in-hazaribag",
+          "publisher": "Mandap.com",
+          "kind": "directory",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Lists Dikshit's Grand Marriage and Banquet Hall in Hazaribag, corroborating the venue identity."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The supplied primary-page evidence includes a visible 2019 post. This does not establish current operations or phone freshness; reconfirm the listed contact directly.",
+        "The directory parking figure of 1,500 is not corroborated and is excluded. No directory capacities or facilities are imported.",
+        "Keep the primary landmark address without adding an unsourced postal code or coordinates.",
+        "The Facebook photos link is a business-page reference only; accessibility and photo rights are not established."
+      ],
+      "ready_for_editorial_review": false,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "rings-and-roses-banquet-hall",
+      "name": "Rings & Roses Banquet Hall",
+      "venue_type": "banquet_hall",
+      "locality": "Hearngunj",
+      "address": "Near Kargil Petrol Pump, Hearngunj, Hazaribagh, Jharkhand 825301",
+      "description": "Rings & Roses Banquet Hall is a banquet venue in Hazaribagh.",
+      "phone": null,
+      "alternate_phone": null,
+      "whatsapp": null,
+      "email": null,
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": [],
+      "website_url": "https://www.facebook.com/people/Rings-Roses-Banquet-hall/100083502815265/",
+      "gallery_url": "https://www.facebook.com/people/Rings-Roses-Banquet-hall/100083502815265/",
+      "sources": [
+        {
+          "url": "https://www.facebook.com/people/Rings-Roses-Banquet-hall/100083502815265/",
+          "publisher": "Rings & Roses Banquet Hall",
+          "kind": "business_page",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Identifies Rings & Roses Banquet Hall in Hazaribagh."
+          ]
+        },
+        {
+          "url": "https://www.mandap.com/hazaribag/rings-and-roses-banquet-hall-in-hazaribag",
+          "publisher": "Mandap.com",
+          "kind": "directory",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Places the venue near Kargil Petrol Pump, Hearngunj, Hazaribagh, Jharkhand 825301."
+          ]
+        },
+        {
+          "url": "https://eventplanet.in/venue/banquet-halls/rings-and-roses-hazaribagh",
+          "publisher": "EventPlanet",
+          "kind": "directory",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Also places the venue near Kargil Petrol Pump, Hearngunj, Hazaribagh, Jharkhand 825301."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The primary business-page evidence establishes the city only. The locality, landmark address and postal code are provisional corroboration from two separate directories, not a primary address confirmation.",
+        "No usable primary business contact was supplied. All phone, alternate-phone, WhatsApp and email fields remain null; do not substitute a directory's lead-routing contact.",
+        "Directory claims conflict: 6 versus 120 rooms, parking for 1,000 versus 80 cars, and 2,000 seated versus an 800-capacity figure. None are adopted as capacities or facilities.",
+        "Keep the record on hold until direct business contact and a primary address can be established.",
+        "The gallery reference uses the supplied business-page base URL; no photos or permission to reuse them are included."
+      ],
+      "ready_for_editorial_review": false,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "the-taj-banquet-hall",
+      "name": "The Taj Banquet Hall",
+      "venue_type": "banquet_hall",
+      "locality": "Pugmil",
+      "address": "Near Petrol Pump, Pugmil, Hazaribagh, Jharkhand",
+      "description": "The Taj Banquet Hall is an event venue in Pugmil, Hazaribagh, near a petrol pump.",
+      "phone": "+917717768293",
+      "alternate_phone": null,
+      "whatsapp": null,
+      "email": null,
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": [],
+      "website_url": "https://www.facebook.com/THETAJ0786/",
+      "gallery_url": "https://www.facebook.com/THETAJ0786/photos",
+      "sources": [
+        {
+          "url": "https://www.facebook.com/THETAJ0786/",
+          "publisher": "The Taj Banquet Hall",
+          "kind": "business_page",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Identifies The Taj Banquet Hall as an event venue.",
+            "Lists Near Petrol Pump, Pugmil, Hazaribagh, Jharkhand.",
+            "Publishes the business phone +917717768293."
+          ]
+        },
+        {
+          "url": "https://www.mandap.com/hazaribag/the-taj-banquet-hall-in-hazaribag",
+          "publisher": "Mandap.com",
+          "kind": "directory",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Has a Hazaribag listing for the venue, but its copy refers to Indore."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The supplied business-page evidence includes a visible 2021 post. Reconfirm the listed phone and present operations before advancing the record.",
+        "The Mandap listing contains an Indore copy error. None of its contact numbers, capacity figures or other venue details are adopted.",
+        "The primary address does not identify the petrol pump by name or provide a PIN code. Obtain entrance details without inventing either.",
+        "No facilities, event prices or WhatsApp support are established. The photos link is not evidence of image permission."
+      ],
+      "ready_for_editorial_review": false,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    },
+    {
+      "slug": "hotel-swayamvar-palace",
+      "name": "Hotel Swayamvar Palace",
+      "venue_type": "hotel",
+      "locality": "Hearanganj",
+      "address": "Hearanganj, Hazaribagh, Jharkhand",
+      "description": "Hotel Swayamvar Palace in Hearanganj, Hazaribagh, advertises hotel rooms and a banquet venue for weddings.",
+      "phone": "+918789260254",
+      "alternate_phone": null,
+      "whatsapp": null,
+      "email": null,
+      "capacity_min": null,
+      "capacity_max": null,
+      "price_min": null,
+      "price_max": null,
+      "price_type": null,
+      "latitude": null,
+      "longitude": null,
+      "facilities": ["rooms"],
+      "website_url": "https://www.facebook.com/hotel.swayamvar.palace/",
+      "gallery_url": "https://www.facebook.com/hotel.swayamvar.palace/photos",
+      "sources": [
+        {
+          "url": "https://www.facebook.com/hotel.swayamvar.palace/",
+          "publisher": "Hotel Swayamvar Palace",
+          "kind": "business_page",
+          "checked_on": "2026-09-08",
+          "facts": [
+            "Identifies Hotel Swayamvar Palace in Hearanganj, Hazaribagh, Jharkhand.",
+            "Publishes the business phone +918789260254.",
+            "Advertises hotel rooms and banquet use for weddings."
+          ]
+        }
+      ],
+      "review_notes": [
+        "The primary address is locality-level only. Do not extend it with search snippets; obtain the entrance, street and any PIN code directly.",
+        "Keep the primary spelling Hearanganj rather than silently merging it with similarly spelled locality names elsewhere in this catalogue.",
+        "Phone freshness has not been confirmed. Relative post-age labels are not a dated contact check and are not recorded as evidence of current operations.",
+        "Only rooms are supported as an enum facility. Capacities, prices and WhatsApp support remain unrecorded.",
+        "The business photos page may have access restrictions; no photo permission or image files are included."
+      ],
+      "ready_for_editorial_review": false,
+      "photos": [],
+      "verified_at": null,
+      "verification_status": "unverified",
+      "status": "draft"
+    }
+  ]
+}
