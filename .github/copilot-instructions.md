@@ -39,4 +39,5 @@
 - [x] Normal localhost:3000 preview is running without demo records or test/synthetic labels; the old localhost:3100 demo preview was stopped.
 - [x] Historical QA: 207 browser passes across documented scenarios; local Lighthouse 99 performance / 100 accessibility. These are not fresh live-service results.
 - [ ] Shared database installation/import: TLS and existing delegated Storage policy authority verified; migration dry-run is blocked by a catalog snapshot error (`metadata-public`, SQLSTATE `22023`). No migrations or inventory writes have occurred.
-- [ ] GitHub push / Vercel release: owner credential is available through Git Credential Manager; push pending. Supabase API credentials/admin setup remain unavailable. No deployment is claimed.
+- [x] Initial code pushed to `RichardHenryJames/shagun` main; hosted GitHub CI passed on commit `2edd4fd`.
+- [ ] Vercel release: initial build was Ready but imported project used Other framework and served 404. Explicit Next.js configuration added for redeployment. Supabase API credentials/admin setup remain unavailable; no real-inventory launch is claimed.
