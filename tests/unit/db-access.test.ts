@@ -4,16 +4,20 @@ import {
   isTaggedTemplateExpression, ScriptTarget, type Node, type SourceFile,
 } from "typescript";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { sanitizedFailure } from "../../scripts/db-migration-plan";
+import { metadataSnapshotQuery, type ManagedSchema } from "../../scripts/db-catalog-snapshot";
+import { STORAGE_POLICIES, sanitizedFailure } from "../../scripts/db-migration-plan";
 
 // Source-boundary contracts, NOT Supautils emulation or managed-service proof.
 // Never import/run the CLI, read credentials, open a socket or execute SQL.
 // PGlite cannot certify the provider's policy-management hook.
 vi.mock("postgres", () => { throw new Error("Database clients are forbidden in access contract tests."); });
 let runner: SourceFile;
+let catalogSource: SourceFile;
 beforeAll(async () => {
   const text = await readFile(new URL("../../scripts/db-migrate.ts", import.meta.url), "utf8");
   runner = createSourceFile("db-migrate.ts", text, ScriptTarget.Latest, true);
+  const catalogText = await readFile(new URL("../../scripts/db-catalog-snapshot.ts", import.meta.url), "utf8");
+  catalogSource = createSourceFile("db-catalog-snapshot.ts", catalogText, ScriptTarget.Latest, true);
 });
 
 function compact(text: string) { return text.replace(/\s+/g, " ").trim(); }
@@ -102,13 +106,13 @@ describe("managed Storage authority source contract (no database execution)", ()
     expect(capabilitySql()).not.toContain("current_setting");
   });
 
-  it("sanitizes malformed-JSON SQLSTATE without inspecting raw settings or exception details", () => {
+  it.each(["22P02", "22023"])("sanitizes SQLSTATE %s without inspecting raw settings or exception details", (code) => {
     const forbidden = vi.fn(() => { throw new Error("Raw provider error fields must not be inspected."); });
-    const error = Object.defineProperties({ code: "22P02" }, Object.fromEntries(
+    const error = Object.defineProperties({ code }, Object.fromEntries(
       ["message", "detail", "hint", "query", "parameters", "stack", "cause"].map((field) => [field, { get: forbidden }]),
     ));
     expect(sanitizedFailure(error)).toEqual({
-      code: "22P02",
+      code,
       message: "The operation failed. Database, filesystem and network details are redacted. No automatic retry is performed.",
     });
     expect(forbidden).not.toHaveBeenCalled();
@@ -128,5 +132,79 @@ describe("managed Storage authority source contract (no database execution)", ()
     expect(compact(runnerFunction("executeMigration").getText(runner))).toContain(
       "for (const statement of migration.statements) await tx.unsafe(statement.text, [], { prepare: false }).simple();",
     );
+  });
+});
+
+describe("catalog snapshot source contract (SQL behavior is covered in isolated PGlite)", () => {
+  it("executes the shared query unchanged, preserves the stage and fails closed on a missing schema", () => {
+    expect(compact(runnerFunction("metadataSnapshot").getText(runner))).toBe(compact(`
+      async function metadataSnapshot(tx: Tx, schema: ManagedSchema, newStorage: boolean, newInventory: boolean): Promise<string> {
+        inspectionStage = \`metadata-\${schema}\`;
+        const query = metadataSnapshotQuery(schema, newStorage, newInventory);
+        const [row] = await tx.unsafe<{ snapshot: string }[]>(query.text, query.parameters);
+        if (!row) throw new SafeError("MANAGED_DEPENDENCIES");
+        return row.snapshot;
+      }
+    `));
+    const snapshot = compact(runnerFunction("snapshot").getText(runner));
+    for (const schema of ["public", "auth", "storage"]) {
+      expect(snapshot).toContain(`${schema}: await metadataSnapshot(tx, "${schema}", newStorage, newInventory)`);
+    }
+  });
+
+  it("binds schema, both flags and every exact reserved policy without interpolating input into SQL", () => {
+    const original = metadataSnapshotQuery("public", false, false);
+    expect(original.parameters).toEqual(["public", false, false, ...STORAGE_POLICIES]);
+    const other = metadataSnapshotQuery("storage", true, true);
+    expect(other.text).toBe(original.text);
+    expect(other.parameters).toEqual(["storage", true, true, ...STORAGE_POLICIES]);
+    // Deliberately bypass the TS union to prove that even invalid input remains
+    // a bound value. The runner only calls the three literal ManagedSchemas.
+    const invalid = "public'; select 1; --" as ManagedSchema;
+    const hostile = metadataSnapshotQuery(invalid, false, true);
+    expect(hostile.text).toBe(original.text);
+    expect(hostile.text).not.toContain(invalid);
+    expect(hostile.parameters).toEqual([invalid, false, true, ...STORAGE_POLICIES]);
+    expect(original.text).toContain("n.nspname = $1::text");
+    expect(original.text).toContain("$2::boolean and n.nspname = 'storage' and c.relname = 'objects'");
+    expect(original.text).toContain("$3::boolean and n.nspname = 'auth' and c.relname = 'users' and t.tgisinternal");
+    for (let index = 0; index < STORAGE_POLICIES.length; index++) {
+      expect(original.text).toContain(`$${index + 4}::text`);
+      expect(original.text).not.toContain(`'${STORAGE_POLICIES[index]}'`);
+    }
+  });
+
+  it("restricts ACL expressions to checked-in keys and normalizes all six ACL surfaces without dropping grants", () => {
+    const acl = catalogSource.statements.filter(isFunctionDeclaration).find((node) => node.name?.text === "acl");
+    expect(acl).toBeDefined();
+    expect(compact(acl!.getText(catalogSource))).toContain("function acl(kind: keyof typeof ACL_EXPRESSIONS): string");
+    const sql = metadataSnapshotQuery("public", false, false).text;
+    expect(sql.match(/pg_catalog\.aclexplode\(nullif\(/g)).toHaveLength(6);
+    expect(sql).toContain("pg_catalog.aclexplode(nullif(a.attacl, '{}'::pg_catalog.aclitem[]))");
+    expect(sql).not.toContain("coalesce(a.attacl");
+    expect(sql).toContain("pg_catalog.aclexplode(nullif(coalesce(t.typacl, pg_catalog.acldefault('T', t.typowner))");
+    expect(sql).not.toContain("acldefault('t'");
+    expect(sql).toContain("'grantor', g.grantor::text, 'grantee', g.grantee::text");
+    expect(sql).toContain("'privilege', g.privilege_type, 'grantable', g.is_grantable");
+    expect(sql).toContain("order by g.grantor, g.grantee, g.privilege_type, g.is_grantable");
+  });
+
+  it("keeps the builder import-safe and excludes bodies, passwords, private records and config blobs", () => {
+    const source = catalogSource.getText();
+    expect(source).not.toMatch(/\b(?:process|console|stdout|stderr|require|set_config)\s*[.(]|from\s+["'](?:postgres|node:|dotenv)/);
+    const sql = metadataSnapshotQuery("public", false, false).text;
+    expect(sql).not.toMatch(/\b(?:pg_get_functiondef|prosrc|probin|proconfig|rolpassword|rolconfig|setconfig|pg_authid|pg_settings)\b/i);
+    expect(sql).not.toMatch(/\bfrom\s+(?:auth\.users|storage\.objects|storage\.buckets)\b/i);
+    expect(sql).toContain("pg_get_function_identity_arguments(p.oid)");
+    expect(sql).toContain("pg_get_function_result(p.oid)");
+    expect(sql).toContain("from pg_auth_members m");
+    expect(sql).toContain("'id', r.oid::text, 'superuser', r.rolsuper, 'inherit', r.rolinherit, 'bypassRls', r.rolbypassrls");
+  });
+
+  it("reports only digests for the three logical metadata snapshots", () => {
+    const summary = compact(runnerFunction("snapshotSummary").getText(runner));
+    expect(summary).toContain("metadataDigests: { public: sha256(value.metadata.public), auth: sha256(value.metadata.auth), storage: sha256(value.metadata.storage) }");
+    expect(summary).not.toMatch(/\b(?:console|stdout|stderr)\b/);
+    expect(compact(runnerFunction("main").getText(runner))).toContain("const preservation = assertPreserved(before, after);");
   });
 });

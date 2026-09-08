@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ActionState } from "@/lib/types";
+import type { ActionState, City } from "@/lib/types";
 
 const mocks = vi.hoisted(() => ({
   sessionClient: vi.fn(), serviceClient: vi.fn(), rateRpc: vi.fn(), headers: vi.fn(),
@@ -33,6 +33,12 @@ const RATE_SECRET = "unit-test-only-limiter-key-not-a-real-secret";
 const TEST_IP = "192.0.2.1";
 const PRIVATE_DETAIL = "SQL/internal-provider-detail-that-must-not-reach-the-form";
 const ADMIN = { id: ADMIN_ID, display_name: "Test administrator", is_active: true, created_at: VERSION };
+// Synthetic saved row for the edit action's session-authorized source lookup.
+const CITY: City = {
+  id: CITY_ID, name: "Test City", slug: "test-city", state: "Jharkhand", country: "India",
+  description: null, status: "draft", metadata: {}, seo_title: null, seo_description: null,
+  launched_at: null, created_at: VERSION, updated_at: VERSION,
+};
 type QueryResult = { data: unknown; error: unknown };
 type StatefulAction = (previous: ActionState, formData: FormData) => Promise<ActionState>;
 
@@ -48,6 +54,7 @@ function query(result: QueryResult) {
 
 function makeSession() {
   const adminQuery = query({ data: ADMIN, error: null });
+  const cityQuery = query({ data: structuredClone(CITY), error: null });
   const mediaQuery = query({ data: null, error: null });
   const cleanupQueries: ReturnType<typeof query>[] = [];
   const remove = vi.fn().mockResolvedValue({ data: [], error: null });
@@ -59,6 +66,7 @@ function makeSession() {
     },
     from: vi.fn((table: string) => {
       if (table === "admin_users") return adminQuery;
+      if (table === "cities") return cityQuery;
       if (table === "media_assets") return mediaQuery;
       if (table === "storage_cleanup_jobs") {
         const next = cleanupQueries.shift();
@@ -72,7 +80,7 @@ function makeSession() {
       return { remove };
     }) },
   };
-  return { client, adminQuery, mediaQuery, cleanupQueries, remove };
+  return { client, adminQuery, cityQuery, mediaQuery, cleanupQueries, remove };
 }
 
 function form(values: Record<string, string> = {}): FormData {
@@ -232,11 +240,45 @@ describe("atomic saves and redirect control flow", () => {
       p_id: CITY_ID, p_expected: VERSION,
       p_data: { name: "Test City", slug: "test-city", state: "Jharkhand", country: "India", description: null, seo_title: null, seo_description: null, status: "draft", metadata: { label: "test", enabled: true } },
     });
+    expect(session.client.from.mock.calls.map(([table]) => table)).toEqual(["admin_users", "cities"]);
+    expect(session.cityQuery.select).toHaveBeenCalledExactlyOnceWith("id,name,state,country,metadata");
+    expect(session.cityQuery.eq).toHaveBeenCalledExactlyOnceWith("id", CITY_ID);
+    expect(session.cityQuery.maybeSingle).toHaveBeenCalledOnce();
+    expect(session.adminQuery.maybeSingle.mock.invocationCallOrder[0]).toBeLessThan(session.cityQuery.maybeSingle.mock.invocationCallOrder[0]);
+    expect(session.cityQuery.maybeSingle.mock.invocationCallOrder[0]).toBeLessThan(session.client.rpc.mock.invocationCallOrder[0]);
     expect(mocks.redirect).toHaveBeenCalledWith("/admin/cities/test-city/edit");
     expect(mocks.revalidateTag).toHaveBeenCalledWith("inventory", { expire: 0 });
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/", "layout");
     expect(session.client.rpc.mock.invocationCallOrder[0]).toBeLessThan(mocks.revalidateTag.mock.invocationCallOrder[0]);
     expect(mocks.revalidateTag.mock.invocationCallOrder[0]).toBeLessThan(mocks.redirect.mock.invocationCallOrder[0]);
+  });
+
+  it.each([
+    { data: null, error: null }, { data: null, error: { message: PRIVATE_DETAIL } },
+  ])("does not save an edit when its saved city lookup fails: %j", async (response) => {
+    session.cityQuery.maybeSingle.mockResolvedValue(response);
+    const result = await saveCityAction({}, cityForm({ id: CITY_ID, expected_updated_at: VERSION }));
+    expect(result.error).toBeDefined();
+    expect(JSON.stringify(result)).not.toContain(PRIVATE_DETAIL);
+    expect(session.cityQuery.eq).toHaveBeenCalledExactlyOnceWith("id", CITY_ID);
+    expect(session.client.rpc).not.toHaveBeenCalled();
+    expect(mocks.revalidateTag).not.toHaveBeenCalled();
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("keeps the posted city version authoritative after the saved-source lookup and preserves conflicts", async () => {
+    session.cityQuery.maybeSingle.mockResolvedValue({ data: { ...CITY, updated_at: "2026-09-08T10:10:11.654321+05:30" }, error: null });
+    session.client.rpc.mockResolvedValue({ data: null, error: { code: "P0001", message: "conflict", details: PRIVATE_DETAIL } });
+    const result = await saveCityAction({}, cityForm({ id: CITY_ID, expected_updated_at: VERSION }));
+    expect(result.error).toMatch(/reload/i);
+    expect(session.client.rpc).toHaveBeenCalledExactlyOnceWith("save_city", {
+      p_id: CITY_ID, p_expected: VERSION,
+      p_data: { name: "Test City", slug: "test-city", state: "Jharkhand", country: "India", description: null,
+        status: "draft", metadata: {}, seo_title: null, seo_description: null },
+    });
+    expect(JSON.stringify(result)).not.toContain(PRIVATE_DETAIL);
+    expect(mocks.revalidateTag).not.toHaveBeenCalled();
+    expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
   it("generates a slug only when blank and uses null version/ID for new records", async () => {

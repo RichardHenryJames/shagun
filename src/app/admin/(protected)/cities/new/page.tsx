@@ -10,7 +10,7 @@ export default async function NewCityPage() {
   await requireAdmin();
   return (
     <>
-      <PageHeader title="Add a city" description="Create a city workspace first. Add venues and a cover after it is saved." breadcrumbs={[{ label: "Overview", href: "/admin" }, { label: "Cities", href: "/admin/cities" }, { label: "Add city" }]} />
+      <PageHeader title="Add a city" description="Filter by state or union territory, search the source catalog and select a city. Review its editable details, then save a normal city workspace; add venues and a cover afterwards." breadcrumbs={[{ label: "Overview", href: "/admin" }, { label: "Cities", href: "/admin/cities" }, { label: "Add city" }]} />
       <CityForm />
     </>
   );

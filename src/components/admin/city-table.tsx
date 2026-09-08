@@ -20,7 +20,7 @@ export function CityTable({ cities, picker = false }: { cities: CitySummary[]; p
                 <td><StatusBadge status={city.status} /></td>
                 <td className="a-numeric">{formatNumber(city.total_count)}</td><td className="a-numeric">{formatNumber(city.published_count)}</td>
                 <td className="a-numeric">{formatNumber(city.draft_count)}</td><td className="a-numeric">{formatNumber(city.review_count)}</td>
-                <td><Link className="a-table-action" href={href} prefetch={false} aria-label={`${picker ? "Choose" : "Open workspace for"} ${city.name}`}>{picker ? "Choose city" : "Workspace"}</Link></td>
+                <td><div className="a-row-actions"><Link className="a-table-action" href={href} prefetch={false} aria-label={`${picker ? "Choose" : "Open workspace for"} ${city.name}`}>{picker ? "Choose city" : "Workspace"}</Link>{!picker && <Link className="a-table-action" href={`${workspace}/preview`} prefetch={false} aria-label={`Preview saved city ${city.name}`}>Preview</Link>}</div></td>
               </tr>
             );
           })}</tbody>

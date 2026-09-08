@@ -5,6 +5,10 @@ import type { AdminUser, City, Json, Photo, Venue, VenueResearch } from "@/lib/t
 // An unmaterialized interface makes its conditional GenericSchema resolve to never.
 type DbRow<Row> = { [Key in keyof Row]: Row[Key] };
 type Table<Row> = { Row: DbRow<Row>; Insert: Partial<DbRow<Row>>; Update: Partial<DbRow<Row>>; Relationships: [] };
+type VenueSearchArgs = {
+  p_city?: string | null; p_query?: string; p_capacity?: number | null; p_budget?: number | null;
+  p_price_type?: string | null; p_facilities?: string[]; p_type?: string | null; p_sort?: string; p_page?: number; p_limit?: number;
+};
 export type Database = {
   shagun: {
     Tables: {
@@ -20,8 +24,10 @@ export type Database = {
     Functions: {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       public_cities: { Args: { p_query?: string; p_page?: number; p_limit?: number }; Returns: Json };
-      search_venues: { Args: { p_city?: string | null; p_query?: string; p_capacity?: number | null; p_budget?: number | null; p_price_type?: string | null; p_facilities?: string[]; p_type?: string | null; p_sort?: string; p_page?: number; p_limit?: number }; Returns: Json };
+      search_venues: { Args: VenueSearchArgs; Returns: Json };
       city_facets: { Args: { p_city: string }; Returns: Json };
+      preview_city_venues: { Args: Omit<VenueSearchArgs, "p_city"> & { p_city: string }; Returns: Json };
+      preview_city_facets: { Args: { p_city: string }; Returns: Json };
       sitemap_entries: { Args: { p_offset?: number; p_limit?: number }; Returns: Json };
       venue_document: { Args: { p_id: string }; Returns: Json };
       admin_dashboard: { Args: Record<string, never>; Returns: Json };

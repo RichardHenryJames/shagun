@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Plus, Settings2 } from "lucide-react";
+import { Eye, Plus, Settings2 } from "lucide-react";
 import { getAdminCity, getAdminVenues } from "@/lib/data/admin";
 import { researchSummaryForCity } from "@/lib/actions/research";
 import { cityPath } from "@/lib/format";
@@ -31,7 +31,7 @@ export default async function CityWorkspacePage({ params, searchParams }: { para
     <>
       <PageHeader title={city.name} description={`${city.state}, ${city.country} · City workspace`} badge={<StatusBadge status={city.status} />}
         breadcrumbs={[{ label: "Overview", href: "/admin" }, { label: "Cities", href: "/admin/cities" }, { label: city.name }]}
-        actions={<><Link href={`${workspace}/edit`} prefetch={false} className="a-button"><Settings2 size={16} aria-hidden="true" />Edit city</Link><Link href={newVenue} prefetch={false} className="a-button a-button--primary"><Plus size={17} aria-hidden="true" />Add venue</Link></>} />
+        actions={<><Link href={`${workspace}/preview`} prefetch={false} className="a-button"><Eye size={16} aria-hidden="true" />Saved city preview</Link><Link href={`${workspace}/edit`} prefetch={false} className="a-button"><Settings2 size={16} aria-hidden="true" />Edit city</Link><Link href={newVenue} prefetch={false} className="a-button a-button--primary"><Plus size={17} aria-hidden="true" />Add venue</Link></>} />
       {firstParam(search.saved) === "1" && <Notice tone="success" title="City saved">You can now add venues or <Link href={`${workspace}/edit#city-photos`} prefetch={false} className="a-link">upload the city’s cover</Link>.</Notice>}
       <StatsRow label={`${city.name} recorded inventory`} items={[
         { label: "Total venues", value: city.total_count }, { label: "Published", value: city.published_count },

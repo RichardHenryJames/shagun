@@ -4,7 +4,15 @@ export function isConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
 }
 export function siteUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  const configured = process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  // Vercel supplies this project-level production hostname, not a request Host
+  // header or an arbitrary preview URL. Explicit custom origins still win.
+  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (process.env.VERCEL && productionHost && /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(productionHost)) {
+    return `https://${productionHost.toLowerCase()}`;
+  }
+  return "http://localhost:3000";
 }
 export function indexingEnabled(): boolean {
   return isConfigured() && process.env.SHAGUN_TEST_FIXTURES !== "true" &&

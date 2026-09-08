@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fixtureMode, isConfigured } from "@/lib/config";
+import { fixtureMode, indexingEnabled, isConfigured, siteUrl } from "@/lib/config";
 import type { SearchFilters } from "@/lib/types";
 import { filterParams, hasActiveFilters, parseSearchParams, photoMetadataSchema, slugSchema, uuidSchema } from "@/lib/validation";
 
@@ -142,5 +142,31 @@ describe("fixture configuration guard (without importing any fixture data)", () 
       vi.stubEnv("SHAGUN_TEST_FIXTURES", value);
       expect(fixtureMode()).toBe(false);
     }
+  });
+});
+
+describe("deployment canonical origin", () => {
+  beforeEach(() => {
+    for (const [key, value] of Object.entries({ NEXT_PUBLIC_SITE_URL: "", VERCEL: "1",
+      VERCEL_PROJECT_PRODUCTION_URL: "shagun.example.test", NEXT_PUBLIC_SUPABASE_URL: "",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "", SHAGUN_TEST_FIXTURES: "false" })) vi.stubEnv(key, value);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("uses the provider's production origin without enabling indexing for an unconfigured app", () => {
+    expect(siteUrl()).toBe("https://shagun.example.test");
+    expect(indexingEnabled()).toBe(false);
+  });
+  it("retains an explicit custom origin", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://venues.example.test/");
+    expect(siteUrl()).toBe("https://venues.example.test");
+  });
+  it("does not use deployment hostnames during local QA", () => {
+    vi.stubEnv("VERCEL", "");
+    expect(siteUrl()).toBe("http://localhost:3000");
+  });
+  it.each(["https://shagun.example.test", "user:password@shagun.example.test", "shagun.example.test/path", "shagun.example.test?redirect=evil"])("rejects non-host provider values: %s", (value) => {
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", value);
+    expect(siteUrl()).toBe("http://localhost:3000");
   });
 });
