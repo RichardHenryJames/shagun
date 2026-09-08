@@ -103,32 +103,6 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "Shagun: Commit reviewed app",
-			"type": "shell",
-			"command": "git add -- .; if ($LASTEXITCODE -ne 0) { throw 'Staging failed.' }; git diff --cached --check; if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed.' }; git commit -m 'Configure Next.js deployment and document researched inventory status'; if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }; git status --short --branch",
-			"isBackground": false,
-			"problemMatcher": []
-		},
-		{
-			"label": "Shagun: Push main",
-			"type": "shell",
-			"command": "git",
-			"args": [
-				"-c",
-				"credential.helper=",
-				"-c",
-				"credential.helper=manager",
-				"-c",
-				"credential.username=RichardHenryJames",
-				"push",
-				"-u",
-				"origin",
-				"main"
-			],
-			"isBackground": false,
-			"problemMatcher": []
-		},
-		{
 			"label": "Shagun: Check hosted workflow",
 			"type": "shell",
 			"command": "gh",
