@@ -142,7 +142,10 @@ async function holdCitySuggestions(page: Page, query: string) {
     })();
     return completion;
   };
-  await page.route(matches, handler, { times: 1 });
+  // Share the permanent egress guard's interception layer. A one-shot page
+  // handler can remove that layer while a Next prefetch is falling through to
+  // the context guard, causing two continuations of the same in-flight route.
+  await page.context().route(matches, handler, { times: 1 });
   return {
     pending,
     release: async () => {
@@ -156,7 +159,7 @@ async function holdCitySuggestions(page: Page, query: string) {
         // even if the test failed before receiving its pending response.
         if (completion) await completion;
       } finally {
-        await page.unroute(matches, handler);
+        await page.context().unroute(matches, handler);
       }
     },
   };
@@ -480,7 +483,7 @@ test.describe("Public city autocomplete", () => {
         await expectCitySuggestions(page, input, "nomatchfixture", 0);
         await expect(form.getByRole("button", { name: "Retry city suggestions", exact: true })).toHaveCount(0);
         // Only this new public endpoint is stubbed, and only for failure paths.
-        await page.route(`${ORIGIN}${CITY_SUGGESTIONS}?q=haza`, (route) => route.fulfill({
+        await page.context().route(`${ORIGIN}${CITY_SUGGESTIONS}?q=haza`, (route) => route.fulfill({
           status, contentType: "application/json", headers: { "Cache-Control": "no-store" },
           body: JSON.stringify(status === 200 ? { items: null } : { error: "Local suggestion failure exercise." }),
         }), { times: 1 });
