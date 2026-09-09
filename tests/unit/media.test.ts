@@ -303,12 +303,47 @@ describe("durable rate limiting and sanitized route failures", () => {
     expect(JSON.stringify(mocks.rpc.mock.calls)).not.toContain(IP);
   });
 
-  it("uses a local bucket outside Vercel and fails closed without Vercel's trusted header", async () => {
+  it("uses a local bucket for explicit loopback HTTP and never falls back when Vercel's trusted header is missing", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000");
     mocks.headers.mockResolvedValue(new Headers({ "x-forwarded-for": IP }));
     await expect(requestFingerprint()).resolves.toBe("local");
+    expect(mocks.headers).not.toHaveBeenCalled();
     vi.stubEnv("VERCEL", "1");
     await expect(requestFingerprint()).rejects.toMatchObject({ status: 503 });
     expect(mocks.serviceClient).not.toHaveBeenCalled();
+  });
+
+  it("fails closed outside Vercel for remote, invalid or non-HTTP loopback origins regardless of forwarding headers", async () => {
+    mocks.headers.mockResolvedValue(new Headers({ "x-vercel-forwarded-for": IP, "x-forwarded-for": IP, "x-real-ip": IP }));
+    for (const origin of [SITE, "http://shagun.example.test", "https://localhost:3000", "http://localhost.example.test:3000", "not-an-origin"]) {
+      vi.stubEnv("NEXT_PUBLIC_SITE_URL", origin);
+      await expect(requestFingerprint()).rejects.toMatchObject({ status: 503, message: "The service cannot accept this request right now." });
+    }
+    expect(mocks.headers).not.toHaveBeenCalled();
+    expect(mocks.serviceClient).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("accepts the trusted header's IPv6 value without changing the limiter subject", async () => {
+    vi.stubEnv("VERCEL", "1");
+    const ipv6 = "2001:db8::10";
+    mocks.headers.mockResolvedValue(new Headers({ "x-vercel-forwarded-for": ` ${ipv6}, ${IP}`, "x-forwarded-for": IP }));
+    const fingerprint = await requestFingerprint();
+    expect(fingerprint).toBe(ipv6);
+    await enforceRateLimit("public-events", fingerprint, 60, 60);
+    const digest = createHmac("sha256", SECRET).update(`public-events:${ipv6}`).digest("hex");
+    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith("consume_rate_limit", { p_key: `public-events:${digest}`, p_limit: 60, p_seconds: 60 });
+    expect(JSON.stringify(mocks.rpc.mock.calls)).not.toContain(ipv6);
+  });
+
+  it("rejects invalid trusted IPs without trusting another header, list entry or exposing their values", async () => {
+    vi.stubEnv("VERCEL", "1");
+    for (const value of ["", PRIVATE_DETAIL, "999.0.2.10", `${IP}:443`, "[2001:db8::10]", "2001:db8::invalid", `, ${IP}`, `${PRIVATE_DETAIL}, ${IP}`]) {
+      mocks.headers.mockResolvedValue(new Headers({ "x-vercel-forwarded-for": value, "x-forwarded-for": IP }));
+      await expect(requestFingerprint()).rejects.toMatchObject({ status: 503, message: "The service cannot accept this request right now." });
+    }
+    expect(mocks.serviceClient).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
   it("fails closed for exhausted budgets, provider failures and missing/short HMAC secrets", async () => {

@@ -3,6 +3,7 @@ import { expect, type APIResponse, type Browser, type BrowserContext, type Locat
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import sharp from "sharp";
+import AxeBuilder from "@axe-core/playwright";
 import { z } from "zod";
 import type { Database } from "../../src/lib/db/database.types";
 import type { City, Photo } from "../../src/lib/types";
@@ -146,7 +147,7 @@ export function field(scope: Page | Locator, label: string): Locator {
   return scope.getByLabel(new RegExp(`^${literal}(?:\\s*\\*)?$`));
 }
 
-export function checked<T>(result: { data: T; error: unknown }, operation: string): T {
+export function checked<T extends { data: unknown; error: unknown }>(result: T, operation: string): T["data"] {
   if (result.error) throw new Error(`${operation} failed against isolated Supabase. Response details were not logged.`);
   return result.data;
 }
@@ -207,11 +208,16 @@ export async function isolatedContext(browser: Browser, width: number, checkBody
     }
     return route.continue();
   });
-  context.on("response", (response) => {
-    const url = new URL(response.url());
+  // Inspect only completed responses. A Next RSC prefetch can intentionally
+  // remain streaming/cancelled; awaiting its body at the response-header event
+  // can hold teardown forever and hide the actual business assertion.
+  context.on("requestfinished", (request) => {
+    const url = new URL(request.url());
     if (url.origin !== INTEGRATION_ORIGIN || /^\/(?:admin|api\/admin)(?:\/|$)/.test(url.pathname)
-      || !/(?:text\/|javascript|json)/i.test(response.headers()["content-type"] ?? "")) return;
+    ) return;
     const task = (async () => {
+      const response = await request.response();
+      if (!response || !/(?:text\/|javascript|json)/i.test(response.headers()["content-type"] ?? "")) return;
       let body: string;
       try { body = await response.text(); }
       catch { return; } // Cancelled prefetches have no completed response body.
@@ -223,7 +229,10 @@ export async function isolatedContext(browser: Browser, width: number, checkBody
   return {
     context,
     async assertSafe() {
-      await Promise.all([...pending]);
+      await Promise.race([
+        Promise.all([...pending]),
+        new Promise<never>((_resolve, reject) => { const timer = setTimeout(() => reject(new Error("Public response inspection did not finish; no safety pass is claimed.")), 5000); timer.unref(); }),
+      ]);
       expect(external, "No browser request may leave the two isolated loopback origins").toBe(0);
       expect(leaks, "Public documents, RSC payloads and assets must not disclose private data").toBe(0);
     },
@@ -238,12 +247,16 @@ export async function login(page: Page, identity: Credentials): Promise<void> {
   try {
     await page.getByRole("textbox", { name: "Email address", exact: true }).fill(identity.email);
     await field(page, "Password").fill(identity.password);
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    const [response] = await Promise.all([
+      page.waitForResponse(value => value.request().method() === "POST" && new URL(value.url()).pathname === "/admin/login", { timeout: 15000 }),
+      page.getByRole("button", { name: "Sign in", exact: true }).click(),
+    ]);
+    console.info(`Integration: login HTTP ${response.status()}, redirect-to-admin=${response.headers()["x-action-redirect"]?.startsWith("/admin;") ?? false}, session-cookie-written=${response.headers()["set-cookie"]?.includes(ADMIN_COOKIE) ?? false}`);
   } catch { throw new Error("Credential form interaction failed; sensitive action details were suppressed."); }
 }
 
 export async function assertLoginRejected(page: Page): Promise<void> {
-  await expect(page.getByRole("alert")).toHaveText(LOGIN_REJECTION);
+  await expect(page.getByRole("region", { name: "Sign in to Shagun", exact: true }).getByRole("alert")).toHaveText(LOGIN_REJECTION);
   await expect(page).toHaveURL(`${INTEGRATION_ORIGIN}/admin/login`);
   await expect(page.getByRole("navigation", { name: "Administration" })).toHaveCount(0);
   await field(page, "Password").fill("");
@@ -376,6 +389,38 @@ export async function assertPreview(page: Page, path: string, heading: string | 
   await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex.*nofollow/);
   await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
+  await auditLayout(page);
+}
+
+/** Check actual authenticated layouts; output only rule IDs/selectors, never form values. */
+export async function auditLayout(page: Page): Promise<void> {
+  await page.evaluate(async () => { await document.fonts.ready; });
+  // Server Action navigation can resolve its URL before streamed styles/layout
+  // settle. Require a stable in-bounds result rather than inspecting that frame.
+  try {
+    await expect.poll(() => page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth),
+      { message: "The authenticated/public layout must settle without horizontal overflow" }).toBeLessThanOrEqual(1);
+  } catch (error) {
+    console.info("Layout geometry (no text/inputs):", await page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*")).filter(e => e.scrollWidth > e.clientWidth + 2 || e.getBoundingClientRect().right > innerWidth + 2)
+      .slice(0, 25).map(e => ({ tag: e.tagName, class: e.className, client: e.clientWidth, scroll: e.scrollWidth, right: e.getBoundingClientRect().right, overflow: getComputedStyle(e).overflowX }))));
+    throw error;
+  }
+  const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth,
+    content: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) }));
+  const overflow = dimensions.content > dimensions.viewport + 1 ? await page.evaluate(() => Array.from(document.body.querySelectorAll<HTMLElement>("*")).filter(element => {
+    const bounds = element.getBoundingClientRect();
+    if (bounds.right <= document.documentElement.clientWidth + 1 || bounds.width === 0) return false;
+    let ancestor = element.parentElement;
+    while (ancestor && ancestor !== document.body) {
+      if (["auto", "scroll", "hidden", "clip"].includes(getComputedStyle(ancestor).overflowX)) return false;
+      ancestor = ancestor.parentElement;
+    }
+    return true;
+  }).slice(0, 12).map(element => ({ tag: element.tagName, class: element.className, width: element.getBoundingClientRect().width }))) : [];
+  expect(dimensions.content, `The authenticated/public layout must not horizontally overflow: ${JSON.stringify(overflow)}`).toBeLessThanOrEqual(dimensions.viewport + 1);
+  const report = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+  expect(report.violations.map((item) => ({ rule: item.id, targets: item.nodes.map((node) => node.target) })),
+    "Accessible labels, contrast and controls are required in actual signed-in layouts").toEqual([]);
 }
 
 export async function openFilters(page: Page): Promise<Locator> {

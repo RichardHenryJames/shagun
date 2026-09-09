@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   ADMIN_COOKIE, CITY_PATH, CITY_WORKSPACE, IMAGE_BYTES_LIMIT, INTEGRATION_ORIGIN, MEDIA_BUCKET, SAME_ORIGIN,
   assertDenied, assertFreshInventory, assertImageResponse, assertLoginBudget, assertLoginRejected, assertPreview,
-  assertRunConfiguration, assertSignedOut, assertStoredVariants, assertWorkspaceCounts, browserSession, checked,
+  assertRunConfiguration, assertSignedOut, assertStoredVariants, assertWorkspaceCounts, auditLayout, browserSession, checked,
   cleanupOwned, editor, field, generatedImages, integrationEnvironment, isolatedContext, loadedImage, localClients, login,
   newInventory, openFilters, publicSafety, record, runOwnedStorageCleanup, savedId, setCityStatus, setVenueStatus,
   submitEditor, uploadPhoto, visitPublic, type GeneratedImage, type LocalClient, type OwnedInventory,
@@ -121,18 +121,30 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
   // the current browser cookies, including any genuine application refresh.
   const ordinary = () => browserSession(ordinaryScope.context, env);
   let adminId: string | undefined;
+  let ordinaryEstablished = false;
 
   try {
     await test.step("Reject bad credentials; sign in and refresh the actual HttpOnly Auth session", async () => {
+      console.info("Integration: checking public draft denial");
       await visitPublic(visitor, CITY_PATH, 404, safe);
+      console.info("Integration: checking logged-out routes and APIs");
       await assertSignedOut(visitor, "/admin/cities");
       await assertDenied(await visitor.request.get("/api/admin/city-catalog?q=Chapra&state=IN.34&limit=12", API));
       await assertLoginBudget(observer, env, width);
+      console.info("Integration: submitting invalid password");
       await login(page, { email: env.admin.email, password: `Invalid-local-only-${randomUUID()}!` });
       await assertLoginRejected(page);
+      console.info("Integration: submitting valid local administrator credentials");
       await login(page, env.admin);
+      const feedback = page.getByRole("region", { name: "Sign in to Shagun", exact: true }).getByRole("alert");
+      if (await feedback.count()) {
+        const message = await feedback.textContent();
+        console.info(`Integration login feedback: ${message === "Unable to sign in. Check your credentials and administrator access, then try again." ? "credential-or-membership-rejection" : message?.includes("Too many") ? "rate-limited" : "other-sanitized-feedback"}`);
+      }
       await expect(page).toHaveURL(`${INTEGRATION_ORIGIN}/admin`);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inventory overview");
+      await auditLayout(page);
+      console.info("Integration: validating UI-issued managed session");
       const user = checked(await session.auth.getUser(), "Validate UI-issued admin session").user;
       if (!user) throw new Error("UI login did not establish a real Supabase user.");
       adminId = user.id;
@@ -141,6 +153,7 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       expect(cookies.length).toBeGreaterThan(0);
       expect(cookies.every((cookie) => cookie.httpOnly && cookie.sameSite === "Lax" && !cookie.secure && cookie.path === "/")).toBe(true);
       const before = checked(await session.auth.getSession(), "Read UI-issued session for actual refresh").session;
+      console.info("Integration: refreshing real local Auth session");
       const refreshed = checked(await session.auth.refreshSession(), "Refresh through real local Supabase Auth").session;
       if (!before || !refreshed) throw new Error("Supabase did not return a session during refresh.");
       expect(refreshed.user.id === before.user.id).toBe(true);
@@ -150,7 +163,7 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inventory overview");
       await assertSignedOut(visitor, `${CITY_WORKSPACE}/preview`);
-    });
+    }, { timeout: 60_000 });
 
     await test.step("Prove non-admin Auth is insufficient and refuse any preexisting Chapra", async () => {
       await login(ordinaryPage, env.nonadmin);
@@ -159,6 +172,7 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       // GoTrue session (not a fabricated cookie) solely to probe allowlist/RLS.
       const auth = checked(await ordinary().auth.signInWithPassword(env.nonadmin), "Authenticate the isolated ordinary account");
       if (!auth.user || !auth.session) throw new Error("The parent must provision the real non-admin local account.");
+      ordinaryEstablished = true;
       expect(auth.user.id !== adminId).toBe(true);
       expect(checked(await ordinary().rpc("is_admin", {}), "Check ordinary user's absent allowlist membership")).toBe(false);
       await assertSignedOut(ordinaryPage, "/admin/cities");
@@ -215,6 +229,7 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       const choice = page.getByRole("listbox", { name: "Matching catalog cities", exact: true }).getByRole("option").filter({ hasText: "geonames:1274353" });
       await expect(choice).toHaveCount(1);
       await expect(choice).toContainText("Bihar, India · District: Saran");
+      await auditLayout(page);
       await choice.click();
       for (const [label, value] of [["City name", "Chapra"], ["State / region", "Bihar"], ["Country", "India"], ["City URL slug", "chapra"]]) {
         await expect(field(page, label)).toHaveValue(value);
@@ -264,6 +279,7 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       owned.venueId = savedId(UUID_PATH.exec(new URL(page.url()).pathname)?.[1] ?? null);
       await expect(editor(page).locator('input[name="id"]')).toHaveValue(owned.venueId);
       await expect(field(page, "Private source notes")).toHaveValue(owned.sourceNotes);
+      await auditLayout(page);
       const research = checked(await observer.from("venue_research").select("reviewed_at,reviewed_by,source_notes").eq("venue_id", owned.venueId).single(), "Observe saved private draft research");
       expect(research?.source_notes === owned.sourceNotes).toBe(true);
       expect(research?.reviewed_at).toBeNull();
@@ -306,6 +322,7 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
         },
       }));
       expect(checked(await observer.from("media_assets").select("id").eq("venue_id", owned.venueId!), "Non-admin attempts must leave all photos intact")?.length).toBe(3);
+      await auditLayout(page);
     });
 
     await test.step("Select the second cover, reorder both ways, edit metadata, delete and drain its Storage job", async () => {
@@ -481,7 +498,7 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       safe(robotsText);
       expect(robotsText).toMatch(/^Disallow:\s*\/\s*$/im);
       expect(robotsText).not.toMatch(/^Sitemap:/im);
-      // Current Next generateSitemaps() returns [] on HTTP; its route rejects
+      // Local HTTP remains deliberately non-indexable; the sitemap route rejects
       // nonexistent partition 0. Do not weaken this to expect production indexing.
       expect((await publicPage.request.get("/sitemap/0.xml", API)).status()).toBe(404);
       await assertDenied(await ordinaryPage.request.get(`/api/admin/media/${owned.photos[1].id}?w=480`, API));
@@ -555,8 +572,10 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
     try {
       // Revoke the ordinary test session with real GoTrue; parent owns deletion
       // of both provisioned Auth identities and the disposable database itself.
-      const signout = await ordinary().auth.signOut({ scope: "local" });
-      expect.soft(Boolean(signout.error), "Ordinary test session sign-out must succeed").toBe(false);
+      if (ordinaryEstablished) {
+        const signout = await ordinary().auth.signOut({ scope: "local" });
+        expect.soft(Boolean(signout.error), "Ordinary test session sign-out must succeed").toBe(false);
+      }
       if (!page.isClosed() && await page.getByRole("button", { name: "Sign out", exact: true }).isVisible()) {
         await page.getByRole("button", { name: "Sign out", exact: true }).click();
         await expect(page).toHaveURL(`${INTEGRATION_ORIGIN}/admin/login`);

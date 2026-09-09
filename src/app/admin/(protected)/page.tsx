@@ -38,7 +38,7 @@ export default async function AdminDashboardPage() {
         <CleanupControl count={data.cleanupCount} />
       </div>
       <section className="a-panel" aria-labelledby="dashboard-recent-title">
-        <div className="a-panel-header"><div><h2 className="a-section-title" id="dashboard-recent-title">Recent additions</h2><p>Most recently created saved venues, including drafts.</p></div><Link href="/admin/venues" prefetch={false} className="a-button a-button--quiet">All venue records</Link></div>
+        <div className="a-panel-header"><div><h2 className="a-section-title" id="dashboard-recent-title">Recent updates</h2><p>Most recently updated saved venues, including drafts.</p></div><Link href="/admin/venues" prefetch={false} className="a-button a-button--quiet">All venue records</Link></div>
         {data.recentVenues.length ? <VenueTable venues={data.recentVenues} recent /> : <EmptyState title="No saved venues yet" action={<Link href="/admin/cities" prefetch={false} className="a-button">Choose a city workspace</Link>}>Start in a city workspace and save a venue draft. No sample venues are shown here.</EmptyState>}
       </section>
     </>

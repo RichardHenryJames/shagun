@@ -92,7 +92,9 @@
 .a-filter-form { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 0.75rem; padding: 1rem; margin-block: 1rem; background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 5px; }
 .a-filter-form > .a-field { flex: 0 1 13rem; margin: 0; }
 .a-filter-form > .a-search-field { flex: 1 1 18rem; }
-.a-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; border: 1px solid var(--a-line); border-radius: 5px; background: var(--a-surface); overscroll-behavior-x: contain; }
+/* Contain absolutely positioned screen-reader labels inside the scroller.
+  Otherwise a hidden header beyond the viewport can enlarge the entire page. */
+.a-table-wrap { position: relative; width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; border: 1px solid var(--a-line); border-radius: 5px; background: var(--a-surface); overscroll-behavior-x: contain; }
 .a-table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 0.85rem; text-align: left; }
 .a-venue-table { min-width: 1020px; }
 .a-table th, .a-table td { padding: 0.75rem 0.9rem; border-bottom: 1px solid #e6eaf0; vertical-align: top; }

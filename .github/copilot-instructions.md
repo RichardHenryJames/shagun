@@ -25,6 +25,7 @@
 - `npm run check`: lint, route type generation, strict typecheck and isolated Vitest/PGlite tests.
 - `npm run build`: normal production build, never migration/seed execution.
 - `npm run build:qa` then `npm run test:e2e`: shared localhost:3100 origin and no database; do not hand-edit QA origins or reuse a mismatched production build.
+- `npm run integration:start`, `npm run build:integration`, `npm run test:integration`: real isolated Auth/REST/Storage at 127.0.0.1:55321 and app localhost:3200, with fixtures disabled and random private test accounts. Never point these tests at hosted data. Stop only this stack with `npm run integration:stop`.
 - The default preview is **Shagun: Local app preview** at localhost:3000 with fixtures disabled. Keep synthetic UI only in deliberately labelled QA mode; never remove its warning while retaining invented data.
 - Test all six widths and empty/one/many inventory scenarios. Do not weaken test assertions to hide real failures.
 - Real Supabase Auth/REST/Storage, concurrent sessions, backups and final-domain performance remain deployment checks, not proven by local fixtures.
@@ -34,10 +35,11 @@
 - [x] Application scaffold and compatible locked dependencies installed.
 - [x] Public discovery, city-first admin, actions, database, storage, SEO and analytics foundation implemented.
 - [x] No additional extensions needed.
-- [x] Latest lint/typecheck, 697 unit/database tests and normal production build passed.
+- [x] Latest lint/typecheck, 950 unit/database tests and final normal production build passed.
 - [x] Twelve real source-cited Hazaribag candidates and an authenticated, insert-only research import are prepared; no direct contact checks or photo rights are claimed.
 - [x] Normal localhost:3000 preview is running without demo records or test/synthetic labels; the old localhost:3100 demo preview was stopped.
-- [x] Historical QA: 207 browser passes across documented scenarios; local Lighthouse 99 performance / 100 accessibility. These are not fresh live-service results.
-- [ ] Shared database installation/import: TLS and existing delegated Storage policy authority verified; migration dry-run is blocked by a catalog snapshot error (`metadata-public`, SQLSTATE `22023`). No migrations or inventory writes have occurred.
+- [x] Fresh public QA across six widths: many 166/1, empty 95/28, one 120/21 (passed/skipped); 381 passes. Real local Auth/Chapra/venue/media/publishing/cleanup workflows passed at mobile/tablet/desktop with axe and overflow checks. Earlier Lighthouse scores remain historical.
+- [x] Shared database installation: catalog inspection repaired, public backup restored locally and matched, five migrations plus draft Hazaribag applied with all seven shared-data/metadata preservation checks passing. No production venue/admin/photo records were created.
 - [x] Initial code pushed to `RichardHenryJames/shagun` main; hosted GitHub CI passed on commit `2edd4fd`.
-- [ ] Vercel release: initial build was Ready but imported project used Other framework and served 404. Explicit Next.js configuration added for redeployment. Supabase API credentials/admin setup remain unavailable; no real-inventory launch is claimed.
+- [ ] Release gate: both API keys are saved in Vercel Production, but hosted Shagun API access returns PGRST106 until its schema is exposed. Real admin identity/input and editorial publication remain required. Do not ask for secrets in chat.
+- [ ] Critical shared-owner gate: zero-row anonymous HEAD requests to existing Bihari `Order` and `ContactMessage` APIs returned 200; SQL grants/no-RLS confirm risk. Do not change sibling permissions without separately approved scope. Push audit work to a review branch, not production, until resolved.

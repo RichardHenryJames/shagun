@@ -1,7 +1,8 @@
 import "server-only";
 import { createHmac } from "node:crypto";
+import { isIP } from "node:net";
 import { headers } from "next/headers";
-import { siteUrl } from "@/lib/config";
+import { isLocalHttpOrigin, siteUrl } from "@/lib/config";
 import { serviceClient } from "@/lib/db/clients";
 
 export class HttpError extends Error {
@@ -56,11 +57,16 @@ export async function readBoundedFormData(request: Request, maxBytes: number): P
 }
 
 export async function requestFingerprint(): Promise<string> {
-  const h = await headers();
-  // Vercel sanitizes this header; do not trust arbitrary X-Forwarded-For elsewhere.
-  const ip = process.env.VERCEL ? h.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() : "local";
-  if (!ip) throw new HttpError(503, "The service cannot accept this request right now.");
-  return ip;
+  if (process.env.VERCEL) {
+    const h = await headers();
+    // Vercel sanitizes this header; do not trust arbitrary X-Forwarded-For elsewhere.
+    const ip = h.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
+    if (ip && isIP(ip)) return ip;
+  } else {
+    try { if (isLocalHttpOrigin(siteUrl())) return "local"; }
+    catch { /* Invalid site configuration is not a local request. */ }
+  }
+  throw new HttpError(503, "The service cannot accept this request right now.");
 }
 
 /** Durable across serverless instances. No raw IP/email is stored. Fail closed. */

@@ -21,7 +21,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   // No HTML/JSON report, state file, HAR, trace, video or automatic screenshot
   // containing credentials, private editor content, Auth responses or cookies.
-  reporter: [["list", { printSteps: false }]],
+  reporter: [["list", { printSteps: true }]],
   use: {
     baseURL: INTEGRATION_ORIGIN,
     browserName: "chromium",

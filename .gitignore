@@ -16,3 +16,5 @@ Thumbs.db
 *.key
 supabase/.temp/
 supabase/.branches/
+tests/local-stack/supabase/.temp/
+tests/local-stack/supabase/.branches/

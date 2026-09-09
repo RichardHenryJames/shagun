@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fixtureMode, indexingEnabled, isConfigured, siteUrl } from "@/lib/config";
+import { configReadiness, fixtureMode, indexingEnabled, isConfigured, siteUrl, type ConfigEnvironment } from "@/lib/config";
 import type { SearchFilters } from "@/lib/types";
 import { filterParams, hasActiveFilters, parseSearchParams, photoMetadataSchema, slugSchema, uuidSchema } from "@/lib/validation";
 
@@ -105,6 +105,172 @@ describe("bounded search filters and URL serialization", () => {
   });
 });
 
+describe("pure configuration readiness (no clients or service calls)", () => {
+  // Deliberately opaque synthetic keys: configuration is not key authentication.
+  const publicApi = {
+    NEXT_PUBLIC_SUPABASE_URL: "https://database.example.test",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "unit-test-only-publishable-key",
+  };
+  const ready: ConfigEnvironment = {
+    ...publicApi, NEXT_PUBLIC_SITE_URL: "https://shagun.example.test", VERCEL: "1",
+    SUPABASE_SERVICE_ROLE_KEY: "unit-test-only-server-key", RATE_LIMIT_SECRET: "s".repeat(32),
+  };
+  function legacyKey(role: string): string {
+    const encode = (value: object) => btoa(JSON.stringify(value)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    return `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ role, synthetic: "??????>>>>>>" })}.unit-test-only-signature`;
+  }
+
+  beforeEach(() => {
+    for (const name of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY",
+      "RATE_LIMIT_SECRET", "NEXT_PUBLIC_SITE_URL", "VERCEL", "VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_ENV", "SHAGUN_TEST_FIXTURES"]) {
+      vi.stubEnv(name, "");
+    }
+  });
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it("keeps ordinary unconfigured local production builds in the preparation state", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(configReadiness({})).toEqual({
+      publicConfigured: false, adminReady: false,
+      issues: ["supabase-url", "publishable-key", "server-key", "rate-limit-secret"],
+    });
+    expect(siteUrl()).toBe("http://localhost:3000");
+    expect(isConfigured()).toBe(false);
+    expect(indexingEnabled()).toBe(false);
+    expect(fixtureMode()).toBe(false);
+  });
+
+  it("requires both nonempty public API values, including in partially configured deployments", () => {
+    for (const field of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] as const) {
+      for (const value of [undefined, "", " \t "]) {
+        const environment = { ...ready, [field]: value };
+        const result = configReadiness(environment);
+        expect(result).toEqual({ publicConfigured: false, adminReady: false,
+          issues: [field === "NEXT_PUBLIC_SUPABASE_URL" ? "supabase-url" : "publishable-key"] });
+        vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", environment.NEXT_PUBLIC_SUPABASE_URL);
+        vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+        expect(isConfigured()).toBe(false);
+      }
+    }
+  });
+
+  it("rejects malformed, credential-bearing and insecure remote Supabase URLs", () => {
+    for (const url of [
+      "not a URL", "//database.example.test", "ftp://database.example.test", "https://",
+      "http://database.example.test", "http://localhost.example.test:54321", "http://192.168.1.10:54321", "http://[::]:54321",
+      "https://unit-user:unit-password@database.example.test", "https://database.example.test:99999",
+      "https://database.example.test/rest/v1", "https://database.example.test?key=unit-only", "https://database.example.test/#fragment",
+    ]) {
+      expect(configReadiness({ ...ready, NEXT_PUBLIC_SUPABASE_URL: url })).toEqual({
+        publicConfigured: false, adminReady: false, issues: ["supabase-url"],
+      });
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", url);
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", publicApi.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+      expect(isConfigured()).toBe(false);
+    }
+  });
+
+  it("supports remote HTTPS and local Supabase HTTP loopback without authenticating example keys", () => {
+    for (const url of ["https://database.example.test", "https://DATABASE.example.test:443/",
+      "http://localhost:54321", "http://127.0.0.1:54321", "http://127.0.0.2:54321", "http://[::1]:54321"]) {
+      expect(configReadiness({ ...ready, NEXT_PUBLIC_SUPABASE_URL: url })).toEqual({ publicConfigured: true, adminReady: true, issues: [] });
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", url);
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", publicApi.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+      expect(isConfigured()).toBe(true);
+    }
+  });
+
+  it("rejects secret keys and privileged legacy JWT roles in public configuration", () => {
+    const serviceJwt = legacyKey("service_role");
+    // Exercise base64url decoding in the payload, not the synthetic signature.
+    expect(serviceJwt.split(".")[1]).toContain("_");
+    expect(serviceJwt.split(".")[1]).toContain("-");
+    for (const key of ["sb_secret_unit-test-only", "  sb_secret_unit-test-only  ", serviceJwt, legacyKey("authenticated")]) {
+      const result = configReadiness({ ...ready, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: key });
+      expect(result).toEqual({ publicConfigured: false, adminReady: false, issues: ["publishable-key"] });
+      expect(JSON.stringify(result)).not.toContain(key);
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", publicApi.NEXT_PUBLIC_SUPABASE_URL);
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", key);
+      expect(isConfigured()).toBe(false);
+    }
+  });
+
+  it("accepts public publishable/anonymous keys and their corresponding server key types", () => {
+    for (const [publicKey, serverKey] of [
+      ["sb_publishable_unit-test-only", "sb_secret_unit-test-only"],
+      [legacyKey("anon"), legacyKey("service_role")],
+      [publicApi.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, ready.SUPABASE_SERVICE_ROLE_KEY],
+    ]) {
+      expect(configReadiness({ ...ready, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: publicKey, SUPABASE_SERVICE_ROLE_KEY: serverKey }))
+        .toEqual({ publicConfigured: true, adminReady: true, issues: [] });
+    }
+  });
+
+  it("withholds admin readiness for missing server credentials or a known public key in the server slot", () => {
+    for (const key of [undefined, "", " \t ", "sb_publishable_unit-test-only", legacyKey("anon"), legacyKey("authenticated")]) {
+      expect(configReadiness({ ...ready, SUPABASE_SERVICE_ROLE_KEY: key }))
+        .toEqual({ publicConfigured: true, adminReady: false, issues: ["server-key"] });
+    }
+  });
+
+  it("requires a private limiter secret of at least 32 characters without changing public readiness", () => {
+    for (const secret of [undefined, "", "s".repeat(31)]) {
+      expect(configReadiness({ ...ready, RATE_LIMIT_SECRET: secret }))
+        .toEqual({ publicConfigured: true, adminReady: false, issues: ["rate-limit-secret"] });
+    }
+    expect(configReadiness(ready)).toEqual({ publicConfigured: true, adminReady: true, issues: [] });
+    for (const [name, value] of Object.entries(publicApi)) vi.stubEnv(name, value);
+    expect(isConfigured()).toBe(true);
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", ready.NEXT_PUBLIC_SITE_URL);
+    expect(indexingEnabled()).toBe(true);
+    expect(configReadiness(publicApi)).toEqual({ publicConfigured: true, adminReady: false, issues: ["server-key", "rate-limit-secret"] });
+  });
+
+  it("requires a valid HTTPS origin on Vercel rather than silently treating a deployment as local", () => {
+    for (const origin of [undefined, "", "http://localhost:3000", "http://shagun.example.test", "not-an-origin"]) {
+      expect(configReadiness({ ...ready, NEXT_PUBLIC_SITE_URL: origin }))
+        .toEqual({ publicConfigured: true, adminReady: false, issues: ["site-origin"] });
+    }
+    expect(configReadiness({ ...ready, NEXT_PUBLIC_SITE_URL: "", VERCEL_PROJECT_PRODUCTION_URL: "SHAGUN.example.test" }))
+      .toEqual({ publicConfigured: true, adminReady: true, issues: [] });
+    expect(configReadiness({ ...ready, NEXT_PUBLIC_SITE_URL: "http://localhost:3000", VERCEL_PROJECT_PRODUCTION_URL: "shagun.example.test" }))
+      .toEqual({ publicConfigured: true, adminReady: false, issues: ["site-origin"] });
+  });
+
+  it("supports secure local setup, but does not promise login for unsupported remote fingerprinting", () => {
+    for (const origin of [undefined, "http://localhost:3000", "http://127.0.0.1:3100", "http://[::1]:3100"]) {
+      expect(configReadiness({ ...ready, VERCEL: "", NEXT_PUBLIC_SITE_URL: origin }))
+        .toEqual({ publicConfigured: true, adminReady: true, issues: [] });
+    }
+    for (const origin of ["https://shagun.example.test", "https://localhost:3000"]) {
+      expect(configReadiness({ ...ready, VERCEL: "", NEXT_PUBLIC_SITE_URL: origin }))
+        .toEqual({ publicConfigured: true, adminReady: false, issues: ["request-fingerprint"] });
+    }
+  });
+
+  it("uses only supplied configuration, never mutates it, logs it or returns private values", () => {
+    const fetch = vi.fn(() => { throw new Error("Readiness must not contact a service."); });
+    vi.stubGlobal("fetch", fetch);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const privateValue = "synthetic-private-config-detail";
+    const environment = Object.freeze({ ...ready,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: `sb_secret_${privateValue}`,
+      NEXT_PUBLIC_SITE_URL: `https://unit-user:${privateValue}@shagun.example.test`,
+    });
+    expect(configReadiness(environment)).toEqual({ publicConfigured: false, adminReady: false, issues: ["publishable-key", "site-origin"] });
+    const serialized = JSON.stringify(configReadiness(environment));
+    expect(serialized).not.toContain(privateValue);
+    expect(serialized).not.toContain(ready.SUPABASE_SERVICE_ROLE_KEY);
+    expect(serialized).not.toContain(ready.RATE_LIMIT_SECRET);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  });
+});
+
 describe("fixture configuration guard (without importing any fixture data)", () => {
   beforeEach(() => {
     for (const [name, value] of Object.entries({
@@ -125,6 +291,9 @@ describe("fixture configuration guard (without importing any fixture data)", () 
   const forbiddenEnvironments: Array<[string, Record<string, string>]> = [
     ["deployed server", { VERCEL: "1" }],
     ["connected database", { NEXT_PUBLIC_SUPABASE_URL: "https://database.example.test", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "unit-test-only-publishable-key" }],
+    ["partially configured API URL", { NEXT_PUBLIC_SUPABASE_URL: "https://database.example.test" }],
+    ["partially configured API key", { NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "unit-test-only-publishable-key" }],
+    ["invalid API configuration", { NEXT_PUBLIC_SUPABASE_URL: "not a URL", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_secret_unit-test-only" }],
     ["deceptive localhost hostname", { NEXT_PUBLIC_SITE_URL: "http://localhost.example.test:3000" }],
     ["HTTPS origin", { NEXT_PUBLIC_SITE_URL: "https://localhost:3000" }],
   ];
@@ -157,16 +326,44 @@ describe("deployment canonical origin", () => {
     expect(siteUrl()).toBe("https://shagun.example.test");
     expect(indexingEnabled()).toBe(false);
   });
-  it("retains an explicit custom origin", () => {
-    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://venues.example.test/");
+  it("retains and normalizes an explicit custom origin", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "  HTTPS://Venues.Example.Test:443/  ");
     expect(siteUrl()).toBe("https://venues.example.test");
   });
   it("does not use deployment hostnames during local QA", () => {
     vi.stubEnv("VERCEL", "");
     expect(siteUrl()).toBe("http://localhost:3000");
   });
-  it.each(["https://shagun.example.test", "user:password@shagun.example.test", "shagun.example.test/path", "shagun.example.test?redirect=evil"])("rejects non-host provider values: %s", (value) => {
+  it.each(["", "https://shagun.example.test", "user:password@shagun.example.test", "shagun.example.test/path", "shagun.example.test?redirect=evil"])("fails closed for a missing or non-host provider value: %s", (value) => {
     vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", value);
-    expect(siteUrl()).toBe("http://localhost:3000");
+    expect(siteUrl).toThrow("Configure a valid HTTPS site origin");
+  });
+  it("never falls back from an invalid explicit origin to a provider origin or insecure cookies", () => {
+    for (const origin of [
+      "not an origin", "//shagun.example.test", "ftp://shagun.example.test", "http://shagun.example.test", "http://localhost:3000",
+      "https://unit-user:unit-private-password@shagun.example.test", "https://shagun.example.test:99999",
+      "https://shagun.example.test/admin", "https://shagun.example.test//", "https://shagun.example.test?", "https://shagun.example.test/#",
+      "https://shagun.example.test\\admin",
+    ]) {
+      vi.stubEnv("NEXT_PUBLIC_SITE_URL", origin);
+      expect(siteUrl).toThrow("Configure a valid HTTPS site origin");
+      try { siteUrl(); }
+      catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).not.toContain(origin);
+        expect((error as Error).message).not.toContain("unit-private-password");
+      }
+    }
+  });
+  it("allows local HTTP only on loopback outside Vercel", () => {
+    vi.stubEnv("VERCEL", "");
+    for (const origin of ["http://localhost:3100", "http://127.0.0.1:3100", "http://127.0.0.2:3100", "http://[::1]:3100"]) {
+      vi.stubEnv("NEXT_PUBLIC_SITE_URL", `${origin}/`);
+      expect(siteUrl()).toBe(origin);
+    }
+    for (const origin of ["http://shagun.example.test", "http://localhost.example.test:3100", "http://192.168.1.10:3100", "http://[::]:3100"]) {
+      vi.stubEnv("NEXT_PUBLIC_SITE_URL", origin);
+      expect(siteUrl).toThrow("Configure a valid HTTPS site origin");
+    }
   });
 });

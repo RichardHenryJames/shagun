@@ -64,7 +64,7 @@ export default async function HomePage() {
       {recent.length > 0 && (
         <section className="sh-section sh-section-ruled sh-container" aria-labelledby="home-recent-title">
           <div className="sh-section-heading">
-            <div><p className="sh-eyebrow">PLACES TO GET TO KNOW</p><h2 className="sh-section-title" id="home-recent-title">New to the directory.</h2></div>
+            <div><p className="sh-eyebrow">PLACES TO GET TO KNOW</p><h2 className="sh-section-title" id="home-recent-title">Recently updated places.</h2></div>
             <Link className="sh-text-link" href="/search">Explore venues<ArrowUpRight size={18} aria-hidden="true" /></Link>
           </div>
           <div className="sh-venue-grid" data-count={Math.min(recent.length, 3)}>{recent.map((venue) => <VenueCard key={venue.id} venue={venue} />)}</div>
