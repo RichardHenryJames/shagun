@@ -1,6 +1,6 @@
 # Shagun — interface design
 
-**As of 2026-09-09:** the [audit/second-pass-2026-09-09](https://github.com/RichardHenryJames/shagun/tree/audit/second-pass-2026-09-09) review branch is published through [9db51bd](https://github.com/RichardHenryJames/shagun/commit/9db51bd5b0a11395d62401353fde3e0db03a59fe); hosted audit checks passed for original `2072dc7`. Follow-up code status and actual Preview evidence are in [VERIFICATION.md](VERIFICATION.md). Production promotion remains blocked by the shared-security and operator/editorial gates in [AUDIT.md](AUDIT.md). Review publication, previews and test inventory are not a public launch.
+**As of 2026-09-09:** home and the city directory have progressive public-city autocomplete, separate from private geographic selection. Current test/publication evidence and preview state are in [VERIFICATION.md](VERIFICATION.md). Production promotion remains blocked by the shared-security and operator/editorial gates in [AUDIT.md](AUDIT.md). Review publication, previews and test inventory are not a public launch.
 
 ## Visual direction
 
@@ -8,9 +8,14 @@ Public pages use warm paper (#faf7f2), ink/plum (#432c3d), muted green (#54675a)
 
 Administration uses neutral surfaces, compact tables, clear lifecycle labels, section navigation and a sticky save/preview bar. It is a productivity interface, not the public visual hierarchy.
 
-## Two different city selectors
+## Public autocomplete and private city selection
 
-**Public discovery:** retain the existing native GET search leading to `/cities`. Query only launched/active guides, with **24 cities per page** and actual published-venue counts. Do not ship thousands of geographic options to visitors or show available catalog places as launched guides. A draft-only database correctly shows preparation/empty states.
+**Public discovery:** home and `/cities` progressively enhance the existing native GET form with a labelled combobox/listbox. Full results retain **24 cities per page** and actual published-venue counts; the suggestion response contains only `name`, `slug` and `state`.
+
+- Show at most **8 name/state-labelled options** from `/api/cities/suggestions`. Match existing active-city visibility, including an active guide whose venues later become empty. Never show catalog places as launched guides or use private GeoNames/research fallback.
+- Support arrow navigation, Enter selection, pointer/touch selection, Escape dismissal and clear focus. Debounce **250 ms**, time out after **8 seconds**, abort stale requests and invalidate pending work on edits, including trailing edits, blur and unmount. Late responses must not reopen a dismissed list.
+- Distinguish loading, no matches and request failure; provide retry without disabling the underlying **native GET/no-JavaScript path**. A draft-only database still correctly shows preparation/empty states.
+- The existing server `SearchBox` for **venue search is unchanged**. Public autocomplete does not use Auth, and carrying an admin cookie cannot widen its inventory. Server validation, anonymous RPC bounds and no-store behavior are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **Admin selection:** the state/union-territory filter and searchable GeoNames combobox help create a city workspace. The checked-in catalog contains **7,112 places across 36 represented states/territories**, not 7,112 Shagun city records. Search returns bounded suggestions with name, state, district and stable source ID; selection fills geographic fields but saves or activates nothing.
 
@@ -49,10 +54,12 @@ Keep `.a-table-wrap` positioned with `position: relative`: absolutely positioned
 
 Preserve oriented image aspect ratios, explicit dimensions and responsive derivatives with maximum widths 480/960/1600, without enlargement. Missing real photos stay visibly missing; local generated images are labelled synthetic and never launch inventory.
 
+An image that fails before hydration must still show the missing-photo fallback. `MediaPhoto` checks completed image state and `naturalWidth` without requiring `currentSrc`; healthy completed images remain visible. Keep the deterministic held-hydration failure test and healthy-image control rather than relying only on a post-hydration error event.
+
 ## Evidence boundary
 
-Windows real Supabase workflows passed **3/3** at **390, 768 and 1440 px**, after the table-wrapper fix with signed-in axe/no-overflow checks, **before the sitemap refactor**. Separate hosted Node 24 Auth/Chapra/venue/media/publishing/cleanup workflows passed **after the sitemap refactor at `2072dc7`**; this is not managed acceptance or evidence for the later guard.
+Revision-scoped six-width scenario results, autocomplete/image regressions and real isolated Auth/city-cover/media workflows are recorded once in [VERIFICATION.md](VERIFICATION.md), separately from older hosted and pre-refactor runs. Passes and intentional skips are distinct; neither fixtures nor real local services certify managed production, physical devices, final-domain performance or full manual accessibility conformance.
 
-The **Windows public matrix before the final catalog-only guard** covers `many` (**166/1**), `empty` (**95/28**) and `one` (**120/21**) at **320, 375, 390, 414, 768 and 1440 px** (passed/skipped). **Total: 381 passes / 50 intentional, inapplicable skips**. Original hosted fixture CI ran only `many`, not this entire matrix.
+Public delayed/error stubs use a browser-context harness boundary, not a change to application Auth. Keep focused repeats distinct from full-scenario evidence; never present an earlier empty/one run as rerun after a harness-only repair.
 
-The post-fix local check and normal fixtures-false build passed; actual local catalog responses and the restored empty localhost:3000 home were confirmed. The original hosted Preview's sanitized catalog 500 was fixed later, so its smoke must not be called all green. These results do not establish final-domain performance, physical-device behavior or full manual accessibility conformance. See [VERIFICATION.md](VERIFICATION.md) for revision-scoped evidence and [../README.md](../README.md) for run modes.
+The original hosted Preview's non-leaking catalog 500 remains a historical finding, not an all-green smoke. New evidence must retain its exact code/environment scope. See [../README.md](../README.md) for run modes; current preview restoration is tracked only in the verification record.

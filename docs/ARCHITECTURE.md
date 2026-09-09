@@ -1,6 +1,6 @@
 # Shagun — product and technical architecture
 
-**As of 2026-09-09:** all five migrations and the draft seed are installed in the approved shared Supabase project. Confirmed critical sibling API exposure, missing Shagun API exposure, no approved production admin and no reviewed inventory block production promotion. The review branch is published through `9db51bd`; hosted audit checks passed for original `2072dc7`. Follow-up code status, Preview evidence and revision-scoped counts belong in [VERIFICATION.md](VERIFICATION.md). Source publication remains review-branch-only; no SQL/shared settings changed with the catalog follow-up.
+**As of 2026-09-09:** all five migrations and the draft seed are installed in the approved shared Supabase project; public city autocomplete is implemented. Shared-security, API, private-admin provisioning and editorial gates still block production. Current and historical test/publication evidence, operator confirmations and local process state belong in [VERIFICATION.md](VERIFICATION.md). Publication remains review-branch-only; autocomplete does not authorize SQL or shared-setting changes.
 
 ## Product judgment
 
@@ -42,11 +42,21 @@ Runtime inventory never reads or writes BihariBhojan's shared `public` tables. T
 
 [../scripts/db-migrate.ts](../scripts/db-migrate.ts) defaults to read-only inspection. Explicit apply uses one repeatable-read transaction for the advisory lock, preflight, pending reviewed SQL, private checksum ledger, optional draft seed, postconditions and preservation checks. There is no build hook, force/reset/adoption mode or automatic retry. An ambiguous commit requires ledger inspection before retrying.
 
-The empty-ACL snapshot error is **fixed**, and guarded `--apply --seed` completed on the real shared project. Preflight recognizes existing protected Supautils delegation on `storage.objects`; no ownership escalation or base-permission change was needed. All seven preservation checks passed, subject to the exact exclusions and snapshot limits documented in [VERIFICATION.md](VERIFICATION.md).
+The empty-ACL snapshot error is **fixed**, and guarded `--apply --seed` completed on the real shared project. Preflight recognizes existing protected Supautils delegation on `storage.objects`; no ownership escalation or base-permission change was needed. Historical preservation results, exact exclusions and snapshot limits are documented in [VERIFICATION.md](VERIFICATION.md).
 
-SQL installation does not configure hosted Data API exposure: the zero-row `shagun` city probe returned **406 / PGRST106 (invalid schema)**. An authenticated, authorized operator must inspect the existing list, append `shagun`, preserve every other entry and exclude `shagun_private`. Shared Auth settings and service-key privileges remain project-wide.
+SQL installation does not establish hosted Data API readiness. Current exposure/sign-in evidence and historical probes are recorded only in [VERIFICATION.md](VERIFICATION.md); older HTTP failures must not be presented as fresh results. An authenticated, authorized operator must inspect the actual list, append `shagun` **only if absent**, preserve every other entry and exclude `shagun_private`. Shared Auth settings and service-key privileges remain project-wide.
 
-**The preserved baseline has a confirmed critical exposure:** anonymous zero-row `HEAD` requests for existing BihariBhojan `public.Order` and `public.ContactMessage` returned **200**, corroborating SQL SELECT grants with RLS disabled. No customer rows were retrieved. This is not a Shagun-induced permission change or a hypothetical reachability issue. Only separately authorized shared/BihariBhojan owners may remediate sibling permissions/RLS; no automatic migration, API-list replacement or production promotion is acceptable. See [AUDIT.md](AUDIT.md).
+**The preserved baseline has a confirmed critical exposure:** the historical zero-row probes and SQL SELECT-grant/RLS evidence for BihariBhojan `public.Order` and `public.ContactMessage` are in [VERIFICATION.md](VERIFICATION.md). No customer-row retrieval is needed to demonstrate impact. This is not a Shagun-induced permission change or a hypothetical reachability issue. Only separately authorized shared/BihariBhojan owners may remediate sibling permissions/RLS; no automatic migration, API-list replacement or production promotion is acceptable. See [AUDIT.md](AUDIT.md).
+
+## Public city autocomplete
+
+Home and `/cities` progressively enhance the native GET city search; the full directory remains **24 cities per page** and usable without JavaScript. The existing server `SearchBox` for venue search is unchanged.
+
+- `GET /api/cities/suggestions` accepts **only `q`**, validates its **raw maximum length of 100** and rejects control characters. It calls `public_cities` through an **anonymous client**, with **page 1, limit 8 and a 5-second timeout**.
+- The safe response projects **only `name`, `slug` and `state`**, at most **8 suggestions**, with **`Cache-Control: no-store`**. Request fetches are also no-store. No IDs, counts, metadata or private fields enter the suggestion projection.
+- Eligibility is current active public-city inventory, matching `/cities`: an already active city remains discoverable even when its published venues become empty. Do not add a nonempty-venue requirement or let an admin cookie widen visibility. There is no Auth lookup, private GeoNames/catalog read or research fallback on this path.
+- The client uses a **250 ms debounce**, **8-second timeout**, abort and stale-response protection. Every edit, including trailing edits, invalidates old work; Escape, blur and unmount cancel/dismiss pending suggestions without late responses reopening them.
+- Name/state-labelled listbox options support arrows, Enter, pointer and touch. Empty results and errors are distinct, with retry and the native GET fallback retained. Interaction details are in [DESIGN.md](DESIGN.md).
 
 ## City catalog and saved discovery preview
 
@@ -54,7 +64,7 @@ The checked-in GeoNames snapshot has **7,112 Indian populated places and 36 repr
 
 For unconfigured `/api/admin/city-catalog` requests, `isConfigured` now guards **before client construction**: a missing Supabase URL/public key returns sanitized **503**, private/no-store and noindex, with no catalog data. Configured requests retain fresh managed Auth and active-UUID allowlist checks. The actual original Preview 500 and subsequent local guard verification are recorded in [VERIFICATION.md](VERIFICATION.md).
 
-The admin combobox supports state filtering, explicit selection and manual entry. `saveCityAction` looks up the selected ID, validates state/India and stores the reserved scalar `metadata.geographic_source_id`. It preserves saved associations and launched URLs rather than trusting posted labels or free metadata. A missing retired source does not silently detach an existing record. The public selector remains native GET search over active city inventory, **24 per page**.
+The admin combobox supports state filtering, explicit selection and manual entry. `saveCityAction` looks up the selected ID, validates state/India and stores the reserved scalar `metadata.geographic_source_id`. It preserves saved associations and launched URLs rather than trusting posted labels or free metadata. A missing retired source does not silently detach an existing record. This private geographic selection aid is separate from the public inventory-only autocomplete above.
 
 Protected `/admin/cities/[slug]/preview` and public discovery share `CityDiscovery` in [../src/components/public/city-discovery.tsx](../src/components/public/city-discovery.tsx). Each route owns its authorization/data boundary; the component performs no queries, analytics or metadata generation.
 
@@ -66,7 +76,7 @@ Migration [../supabase/migrations/0005_city_preview.sql](../supabase/migrations/
 
 **Add researched drafts** skips existing `(city_id, slug)` records in every lifecycle and inserts missing venues through `save_venue`. It never upserts edits, imports photos or activates a city. Inputs force draft/unverified/unreviewed state and a null verification date. Provenance and caveats enter private `venue_research.source_notes`, not public descriptions, metadata or credits.
 
-Each venue save is atomic; the batch is not. Inspect confirmed partial progress before retry. The prepared Hazaribag batch remains unimported; human review and image rights are not supplied by source-page dates or readiness flags. Follow [OPERATIONS.md](OPERATIONS.md).
+Each venue save is atomic; the batch is not. Inspect confirmed partial progress before retry. Current Hazaribag import/review status belongs in [VERIFICATION.md](VERIFICATION.md); human review and image rights are not supplied by source-page dates or readiness flags. Follow [OPERATIONS.md](OPERATIONS.md).
 
 ## Relational model
 
@@ -86,6 +96,7 @@ Constraints enforce positive prices/capacities, ordered ranges, paired valid coo
 ## Routes and SEO
 
 - `/`, `/cities`, `/search`, `/about`, `/privacy`
+- `GET /api/cities/suggestions` is the bounded, anonymous, no-store public-city suggestion endpoint, not the admin catalog.
 - `/city/[city]` is the canonical city discovery page.
 - `/city/[city]/vivah-bhawan` permanently redirects to the canonical city route, preserving search parameters; avoids duplicate near-identical pages.
 - `/city/[city]/vivah-bhawan/[venue]` is a venue's stable URL.
@@ -96,7 +107,7 @@ Constraints enforce positive prices/capacities, ordered ranges, paired valid coo
 
 **Request-time sitemaps:** [../src/lib/sitemaps.ts](../src/lib/sitemaps.ts) supplies the dynamic Node handlers in [../src/app/sitemap.xml/route.ts](../src/app/sitemap.xml/route.ts) and [../src/app/sitemap/[partition]/route.ts](../src/app/sitemap/[partition]/route.ts). These replace build-time `generateSitemaps` enumeration: sitemap generation performs no build-time database fetch, `/sitemap/0.xml` remains stable, and the index discovers new partitions from current eligible inventory at request time.
 
-Non-indexable environments, including localhost HTTP, return **404** for sitemaps; malformed or out-of-range partition names also return 404. Invalid counts/rows, private paths, limit violations and service failures fail closed with a sanitized **503**, `no-store`, `noindex` and `Retry-After: 60`. Successful XML is escaped and no-store. Async [../src/app/robots.ts](../src/app/robots.ts) makes **no database query** and advertises **only `/sitemap.xml`**, not every partition, when indexing is enabled. Nineteen request-time tests cover these contracts; they are not managed HTTPS acceptance.
+Non-indexable environments, including localhost HTTP, return **404** for sitemaps; malformed or out-of-range partition names also return 404. Invalid counts/rows, private paths, limit violations and service failures fail closed with a sanitized **503**, `no-store`, `noindex` and `Retry-After: 60`. Successful XML is escaped and no-store. Async [../src/app/robots.ts](../src/app/robots.ts) makes **no database query** and advertises **only `/sitemap.xml`**, not every partition, when indexing is enabled. Request-time regression results are recorded in [VERIFICATION.md](VERIFICATION.md); those contracts are not managed HTTPS acceptance.
 
 ## Security, privacy and consistency
 
@@ -116,6 +127,8 @@ Migration [../supabase/migrations/0004_media_uploads.sql](../supabase/migrations
 
 Responsive `picture`/`srcset`, explicit dimensions, first-image priority and below-fold lazy loading avoid double optimization costs. Public derivatives can have a short 60-second CDN cache; already-public images may persist in external caches and cannot be recalled from visitors. Draft media is never cached publicly. Remove copyrighted/sensitive media at the provider and purge caches when needed.
 
+`MediaPhoto` also detects a completed broken image during hydration using `node.complete` and `naturalWidth`, without requiring `currentSrc`. An SSR image can fail before React attaches an error handler; the fallback must cover that case while retaining healthy images. Deterministic held-hydration coverage and the limits of the original failure diagnosis are recorded in [VERIFICATION.md](VERIFICATION.md).
+
 No real venue photos are seeded. Decorative original vector artwork is visually distinct from photography and not represented as a venue.
 
 ## Rendering and performance
@@ -128,16 +141,14 @@ Canonical city and venue routes resolve availability in blocking `generateMetada
 
 ## Deployment and cost
 
-Deployment uses Vercel's **Node runtime** and the approved shared Supabase project; no container or always-on application worker is required. Docker hosts only the isolated local/CI integration stack. Production settings are saved, and the normal build **passed after the catalog guard with fixtures false**, dynamic request-time sitemaps and **no database queries during compilation**. Builds never migrate, seed or provision users. The review branch is published; original `2072dc7` hosted checks passed. Follow-up status and the observed Preview/non-Production deployment with unchanged remote/local `main` are recorded in [VERIFICATION.md](VERIFICATION.md). Managed acceptance remains open; do not promote production or force launch around the shared-security gate.
+Deployment uses Vercel's **Node runtime** and the approved shared Supabase project; no container or always-on application worker is required. Docker hosts only the isolated local/CI integration stack. Production settings are saved. Builds never migrate, seed or provision users; request-time sitemaps do not query inventory during compilation. Current check/build/publication results and historical hosted scopes are canonical in [VERIFICATION.md](VERIFICATION.md), not transferable between revisions. Managed acceptance remains open; do not promote production or force launch around the shared-security gate.
 
-The historical Windows **3/3** real-service run preceded the sitemap refactor; separate hosted Node 24 workflows **passed after it at `2072dc7`**. That supplies post-sitemap Auth/Storage evidence for the original audit, not the later guard or managed production acceptance. Exact scopes remain in [VERIFICATION.md](VERIFICATION.md).
-
-Keep three local modes distinct: normal/no-database preview on 3000, labelled database-free fixtures on 3100, and real local Supabase integration with Next on 3200. After the guard fix, the normal localhost:3000 preview was restored and confirmed honestly empty, without synthetic warnings or inventory. The local Auth provider configuration is intentionally test-owned, not a shared Auth policy template. Exact commands, origins and process ownership are in [../README.md](../README.md). Release gates and **historical planning estimates, not fresh prices**, are in [DEPLOYMENT.md](DEPLOYMENT.md).
+Keep three local modes distinct: normal/no-database preview on 3000, labelled database-free fixtures on 3100, and real local Supabase integration with Next on 3200. They share generated build output; rebuild normally before restoring the default preview after tests. Current preview/stack state is recorded only in [VERIFICATION.md](VERIFICATION.md). Local Auth settings are test-owned, not a shared Auth policy template. Commands and process ownership are in [../README.md](../README.md); release gates and **historical planning estimates, not fresh prices**, are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Principal launch risks
 
 1. **Critical confirmed shared Order/ContactMessage exposure:** obtain separate owner authorization for remediation; preservation success does not establish a secure baseline.
-2. Shagun is missing from the hosted API schema list, the dashboard session expired and no approved real admin identity is available. Finish operator gates without changing sibling access as a side effect.
-3. No reviewed inventory or authorized photos: keep the city draft; never fill gaps with fabricated facts. Recheck stale information after 90 days without presenting verification as endorsement.
+2. Require fresh Data API verification, private operator sign-in and real administrator provisioning with a new unique password of at least 12 characters and actual-UUID allowlisting. Current evidence belongs in [VERIFICATION.md](VERIFICATION.md), not a reused historical HTTP status. Identity approval alone does not close these gates; do not change sibling access or weaken Auth policy.
+3. Editorial readiness requires reviewed real inventory and rights for any photos; keep the city draft until release clearance and never fill gaps with fabricated facts. Import/review status is in [VERIFICATION.md](VERIFICATION.md). Recheck stale information after 90 days without presenting verification as endorsement.
 4. Incomplete recovery coverage: the pre-install public-schema scratch restore is not a current Shagun backup and did not restore managed Auth/settings, object bytes, roles or original ownership/ACLs.
 5. Final-domain behavior and operational capacity remain unverified: local passes do not certify HTTPS cookies, CDN recall, concurrency, pricing, quotas or managed availability. See [AUDIT.md](AUDIT.md).

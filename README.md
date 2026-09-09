@@ -4,27 +4,25 @@ A city-first wedding venue directory with open discovery and private editorial a
 
 ## Current status — 2026-09-09
 
-**Managed SQL installed; review branch published; final application CI and Preview smoke passed; production promotion blocked.** Recorded work spans 8–9 September. Exact revision-scoped evidence is maintained in [docs/VERIFICATION.md](docs/VERIFICATION.md).
+**Managed SQL installed; public city autocomplete implemented; production promotion blocked.** Current check/matrix/integration results, publication scope, operator confirmations and preview/stack state are maintained only in [docs/VERIFICATION.md](docs/VERIFICATION.md). Earlier hosted passes are historical, not certification of later code.
 
-- The empty-ACL catalog snapshot fix is complete. Guarded `--apply --seed` successfully installed **all five migrations, 0001–0005**, including city-preview RPCs, in shared Supabase project `ixkhyqqovacdramymqjk`. The private bucket/policies and all seven preservation checks passed.
-- The managed inventory contains **one draft Hazaribag city, nine facilities and no venues, photos or administrators**. No Chapra production record has been created. Empty public discovery is the correct result, not a failed seed.
-- **Critical shared-project exposure is confirmed:** anonymous zero-row `HEAD` probes of `public.Order` and `public.ContactMessage` returned **200**, alongside existing SELECT grants and disabled RLS. No customer rows were retrieved. This preexisting baseline was preserved, not made secure; remediation needs separate BihariBhojan/shared-owner authorization.
-- Production Vercel configuration is saved, including both API keys; do not request them again. Shagun's zero-row API probe returned **406 / PGRST106 (invalid schema)**. Dashboard management access returned **401** and requires the user's sign-in; `shagun` must be appended to the existing exposed-schema list without removing other entries or exposing `shagun_private`. No approved real admin email has been provided.
-- The **12 source-cited Hazaribag candidates remain unimported and unreviewed**. Photos are absent and rights unknown. A real admin must import/review/publish deliberately before Hazaribag can go live.
-- Actual Preview smoke at original `2072dc7` found a **sanitized 500 without a leak** on unconfigured `/api/admin/city-catalog`. Published fix [9db51bd](https://github.com/RichardHenryJames/shagun/commit/9db51bd5b0a11395d62401353fde3e0db03a59fe) adds an `isConfigured` guard before client construction, returning private/no-store, noindex **503** with no catalog data. Configured fresh Auth/allowlist checks are unchanged; no SQL/shared settings changed. The old preview was **not all green**.
-- **After the fix**, `npm run check` passed **952 tests across 14 files**, including **60 catalog tests** (two new missing-URL/key cases) and **19 request-time sitemap tests**. The normal `npm run build` **passed with `SHAGUN_TEST_FIXTURES=false`**, dynamic request-time sitemaps and **no database queries during compilation**. Actual local valid/malformed catalog requests confirmed the private 503 contract, and the honest empty localhost:3000 home was restored.
-- The **Windows public matrix before the final catalog-only guard** covers all six widths: `many` **166/1**, `empty` **95/28**, `one` **120/21** (passed/skipped), totaling **381 passes / 50 intentional, inapplicable skips**. Historical Windows real-service **3/3** preceded the sitemap refactor; separate hosted Node 24 **3/3 at `2072dc7`** supplies post-sitemap Auth/Storage evidence. Hosted fixture CI covered only `many`, not the whole Windows matrix.
-- **Review publication succeeded:** [audit/second-pass-2026-09-09](https://github.com/RichardHenryJames/shagun/tree/audit/second-pass-2026-09-09) contains `9db51bd`. Both application revisions passed their own hosted jobs; the final fix also passed actual Preview smoke, including the corrected catalog response. Exact runs/counts are in [docs/VERIFICATION.md](docs/VERIFICATION.md). Deployment is **Preview, not Production**; GitHub `main` remains at `b62d6ed` and user-local `main` at `b066ed5`.
-- **Do not promote `main`/Production or force a launch** while the critical shared-security, API, real-admin, reviewed-inventory and full managed-acceptance/recovery gates remain open.
+- All **five migrations, 0001–0005**, and the draft Hazaribag seed are installed in shared Supabase project `ixkhyqqovacdramymqjk`. Apply-time preservation, read-only inspection and inventory observations have separate scopes in [docs/VERIFICATION.md](docs/VERIFICATION.md); SQL installation does not establish API or public readiness.
+- Home and the city directory now progressively enhance native GET search with bounded public-city suggestions. Venue search and the private admin GeoNames catalog remain separate.
+- **Critical shared-project exposure requires separately authorized remediation.** The `public.Order`/`public.ContactMessage` evidence and owner-approval status are in [docs/VERIFICATION.md](docs/VERIFICATION.md). Never retrieve customer rows to demonstrate impact or change sibling access as a Shagun side effect.
+- Production Vercel keys are saved; do not request them again. Current Data API/sign-in evidence is in [docs/VERIFICATION.md](docs/VERIFICATION.md), not inferred from historical HTTP failures. After private sign-in, verify the actual list and append `shagun` **only if absent and authorized**, preserving every other entry and excluding `shagun_private`.
+- Identity approval alone is not provisioning. A new unique password must be entered privately with the unchanged **12-character minimum**, followed by actual-UUID allowlisting and managed access checks. Provisioning status is recorded only in [docs/VERIFICATION.md](docs/VERIFICATION.md).
+- Research requires explicit draft import, actual editorial review and rights for any photos. Current import/review status is in [docs/VERIFICATION.md](docs/VERIFICATION.md). Do not substitute research or synthetic inventory for public records or infer readiness from the draft seed alone.
+- Publication remains **review-branch-only**. **Do not promote `main`/Production or force a launch** while the shared-security, API, real-admin, editorial and managed-acceptance/recovery gates remain open.
 
-[docs/VERIFICATION.md](docs/VERIFICATION.md) separates completed evidence from pending results. [docs/AUDIT.md](docs/AUDIT.md) records fixes and confirmed launch blockers; it does not claim that every exploratory suggestion was a bug.
+[docs/AUDIT.md](docs/AUDIT.md) records supported fixes and launch blockers; it does not treat every exploratory suggestion as a proven bug.
 
 ## Product and data boundaries
 
 - [supabase/seed.sql](supabase/seed.sql) creates only the draft Hazaribag city, never venues, accounts or photos; conflicts do not overwrite edits. The facility vocabulary comes from the inventory migration.
 - [data/research/hazaribag-2026-09-08.json](data/research/hazaribag-2026-09-08.json) is a separate research batch, not public fallback data. **Add researched drafts** requires active admin authorization, skips existing city/slug records and leaves new entries draft/unverified/unreviewed. Website evidence is not contact verification or photo permission.
 - The admin GeoNames catalog has **7,112 places across 36 represented states/territories**. It is a local selection aid, not thousands of saved or launched cities. State-filtered selection is validated server-side and stored as `metadata.geographic_source_id`; deliberate manual entry remains available.
-- Public city selection uses existing GET search over active guides, **24 per page**. Venue discovery uses **12 per page**, actual inventory-derived facets and comparable price bases. Private source notes never enter public descriptions, city metadata or photo credits.
+- Public city selection on home and `/cities` adds at most **8 name/state-labelled suggestions** from active public inventory, including an active empty guide under the existing visibility rule. Native GET search and **24-city pages** still work without JavaScript. Suggestions use only `/api/cities/suggestions`, never Auth, the private catalog or research fallback. Venue discovery retains the existing server `SearchBox`, **12 venues per page**, inventory-derived facets and comparable price bases.
+- Private source notes never enter public descriptions, city metadata, suggestions or photo credits. The suggestion response contains only `name`, `slug` and `state`; its bounds and cancellation contract are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - Saved city preview at `/admin/cities/[slug]/preview` uses the actual shared `CityDiscovery` interface and admin-only RPCs. It includes saved draft/published venues, is authenticated/noindex/no-store, emits no analytics and is not a shareable public link.
 - Synthetic records and generated images are local QA only, visibly labelled and never imported into the shared project. There is no demo Auth bypass.
 
@@ -39,6 +37,7 @@ Shagun uses isolated `shagun` / `shagun_private` namespaces, private `shagun-med
 | Purpose | Routes |
 | --- | --- |
 | Public discovery | `/`, `/cities`, `/search`, `/city/[city]` |
+| Public city suggestions | `GET /api/cities/suggestions`, `q` only |
 | Venue detail | `/city/[city]/vivah-bhawan/[venue]` |
 | Standards/privacy | `/about`, `/privacy` |
 | Private operations | `/admin/login`, `/admin`, `/admin/cities`, `/admin/venues` |
@@ -53,7 +52,7 @@ Sitemaps no longer enumerate inventory during builds: new partitions appear at r
 
 ## Local development and test modes
 
-Use **Node 24** and `npm ci` from this root. The supported engine range is `>=22.0.0 <25`; use [package.json](package.json) and [package-lock.json](package-lock.json), not ad-hoc upgrades. Supabase CLI **2.116.0** remains pinned; `fflate` is patched to **0.8.3**, with **zero findings** in the subsequent dependency audit.
+Use **Node 24** and `npm ci` from this root. The supported engine range is `>=22.0.0 <25`; use [package.json](package.json) and [package-lock.json](package-lock.json), not ad-hoc upgrades. Supabase CLI **2.116.0** remains pinned; `fflate` is patched to **0.8.3**. Revision-scoped dependency-audit evidence is in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 | Mode | Origin/services | Contract |
 | --- | --- | --- |
@@ -61,7 +60,7 @@ Use **Node 24** and `npm ci` from this root. The supported engine range is `>=22
 | Public fixture QA | `http://localhost:3100`, no database | Explicitly labelled `empty`, `one` or `many` fixtures; matching build and runtime scenario required. |
 | Real local integration | Next at `http://localhost:3200`; Supabase API `http://127.0.0.1:55321`, database port **55322** | Real local Auth, REST, Storage and PostgreSQL; `SHAGUN_TEST_FIXTURES=false`; owned disposable project only. |
 
-After the catalog guard, the normal production build passed with `SHAGUN_TEST_FIXTURES=false`; the restored browser preview at `http://localhost:3000/` confirmed the honest empty preparation state without synthetic warnings or inventory and remains running.
+Actual build, preview-restoration and integration-stack state are recorded in [docs/VERIFICATION.md](docs/VERIFICATION.md). The default-mode contract above is not a claim that its preview is currently running.
 
 For ordinary development, use `npm run dev`. For the normal preview, build with `npm run build`, then use the existing preview task or `npm run start -- --hostname localhost`. Builds do not migrate, seed or provision managed services.
 
@@ -82,7 +81,7 @@ The local Auth configuration deliberately combines `auth.email.enable_signup=tru
 
 All modes share generated build output. Stop the relevant preview before rebuilding, keep ports free for the owning test process and never hand-edit QA origins or reuse a mismatched build. After either test mode, rebuild normally before restarting the default preview. Never deploy fixture or integration output.
 
-CI defines **two jobs**: Node **22** quality/fixture checks, then Node **24** real local Auth/Storage workflows using Docker. The authenticated job avoids credential/trace/dump artifacts and always attempts to stop its own integration stack. Both jobs passed independently for original `2072dc7` and the final catalog fix `9db51bd`, including post-sitemap authenticated workflows. Revision-specific hosted counts and Preview evidence are canonical in [docs/VERIFICATION.md](docs/VERIFICATION.md); none authorize production promotion.
+CI defines **two jobs**: Node **22** quality/fixture checks, then Node **24** real local Auth/Storage workflows using Docker. The authenticated job avoids credential/trace/dump artifacts and always attempts to stop its own integration stack. Revision-specific hosted counts and Preview evidence are canonical in [docs/VERIFICATION.md](docs/VERIFICATION.md); older passes never certify newer code or authorize production promotion.
 
 ## Release and operator documentation
 
@@ -93,4 +92,4 @@ CI defines **two jobs**: Node **22** quality/fixture checks, then Node **24** re
 - [docs/VERIFICATION.md](docs/VERIFICATION.md) — managed SQL evidence, completed local checks/build/matrix and pending release evidence.
 - [docs/AUDIT.md](docs/AUDIT.md) — fixed findings, rejected suggestions and separate shared-project risk.
 
-No private secrets belong in chat, command arguments, screenshots or source control. An operator may create the approved Auth account privately in Supabase's dashboard and explicitly allowlist its actual UUID; the existing `npm run admin:create` alternative requires private local configuration and hidden password entry in a trusted terminal. Neither is a build step. Shared-owner security authorization, dashboard sign-in, an approved admin identity and real editorial review remain user-owned gates; no production launch is authorized here.
+No private secrets belong in chat, command arguments, screenshots or source control. After the API/operator gates, provision the supplied identity privately through the dashboard/actual-UUID allowlist procedure or `npm run admin:create` with hidden password entry in a trusted terminal. Local Auth and the helper retain their 12-character minimum; never persist a chat-supplied credential or lower the policy. Neither provisioning path is a build step. Identity approval alone does not satisfy private provisioning, shared-owner security authorization or real editorial review; no production launch is authorized here.
