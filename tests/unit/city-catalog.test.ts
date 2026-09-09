@@ -60,6 +60,8 @@ let session: ReturnType<typeof makeSession>;
 const temporaryDirectories: string[] = [];
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://unit-project.example.test");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "unit-test-only-publishable-key");
   session = makeSession();
   mocks.sessionClient.mockResolvedValue(session.client);
   mocks.fetch.mockImplementation(async () => { throw new Error("Real network access is forbidden in catalog unit tests."); });
@@ -70,6 +72,7 @@ afterEach(async () => {
   expect(mocks.anonymousClient).not.toHaveBeenCalled();
   expect(session.client.rpc).not.toHaveBeenCalled();
   expect(session.client.storage.from).not.toHaveBeenCalled();
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   for (const directory of temporaryDirectories.splice(0)) await rm(directory, { recursive: true, force: true });
 });
@@ -408,6 +411,19 @@ async function expectPrivateError(response: Response, status: number): Promise<v
 }
 
 describe("private read-only admin catalog route", () => {
+  it.each(["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"])("returns a private setup 503 without %s before constructing a session", async (variable) => {
+    vi.stubEnv(variable, "");
+    for (const parameters of ["", "?q=Chapra", "?q=Chapra&limit=bad"]) {
+      const response = await GET(request(parameters));
+      await expectPrivateError(response.clone(), 503);
+      expect(await response.json()).toEqual({ error: "Administrator services are not configured." });
+    }
+    expect(mocks.sessionClient).not.toHaveBeenCalled();
+    expect(session.client.auth.getUser).not.toHaveBeenCalled();
+    expect(session.client.from).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
   it("denies anonymous access before query validation or allowlist/inventory lookup", async () => {
     session.client.auth.getUser.mockResolvedValue({ data: { user: null }, error: null });
     for (const parameters of ["", "?q=Chapra", `?q=${"x".repeat(101)}&limit=bad`]) await expectPrivateError(await GET(request(parameters)), 401);

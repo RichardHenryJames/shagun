@@ -1,6 +1,7 @@
 import { freshAdminContext } from "@/lib/actions/shared";
 import { catalogSummary, getCatalogStates, searchCityCatalogWithCount } from "@/lib/city-catalog";
 import { DEFAULT_CATALOG_RESULTS, MAX_CATALOG_RESULTS, validCatalogQuery } from "@/lib/city-catalog-data";
+import { isConfigured } from "@/lib/config";
 import { HttpError, routeError } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -14,6 +15,9 @@ const headers = {
 
 export async function GET(request: Request): Promise<Response> {
   try {
+    // A deliberately unconfigured preview cannot establish an Auth session.
+    // Report setup unavailability without constructing a client or returning data.
+    if (!isConfigured()) throw new HttpError(503, "Administrator services are not configured.");
     // Always check managed Auth and the current active UUID allowlist, including
     // empty/invalid queries. No service-role reads or cached administrator context.
     await freshAdminContext();
