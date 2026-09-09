@@ -4,17 +4,18 @@ A city-first wedding venue directory with open discovery and private editorial a
 
 ## Current status — 2026-09-09
 
-**Managed SQL installed; local verification passed; production promotion blocked.** Recorded work spans 8–9 September.
+**Managed SQL installed; review branch published; final application CI and Preview smoke passed; production promotion blocked.** Recorded work spans 8–9 September. Exact revision-scoped evidence is maintained in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 - The empty-ACL catalog snapshot fix is complete. Guarded `--apply --seed` successfully installed **all five migrations, 0001–0005**, including city-preview RPCs, in shared Supabase project `ixkhyqqovacdramymqjk`. The private bucket/policies and all seven preservation checks passed.
 - The managed inventory contains **one draft Hazaribag city, nine facilities and no venues, photos or administrators**. No Chapra production record has been created. Empty public discovery is the correct result, not a failed seed.
 - **Critical shared-project exposure is confirmed:** anonymous zero-row `HEAD` probes of `public.Order` and `public.ContactMessage` returned **200**, alongside existing SELECT grants and disabled RLS. No customer rows were retrieved. This preexisting baseline was preserved, not made secure; remediation needs separate BihariBhojan/shared-owner authorization.
 - Production Vercel configuration is saved, including both API keys; do not request them again. Shagun's zero-row API probe returned **406 / PGRST106 (invalid schema)**. Dashboard management access returned **401** and requires the user's sign-in; `shagun` must be appended to the existing exposed-schema list without removing other entries or exposing `shagun_private`. No approved real admin email has been provided.
 - The **12 source-cited Hazaribag candidates remain unimported and unreviewed**. Photos are absent and rights unknown. A real admin must import/review/publish deliberately before Hazaribag can go live.
-- `npm run check` passed **950 tests across 14 files**, including **19 request-time sitemap tests**. The final normal `npm run build` **passed with `SHAGUN_TEST_FIXTURES=false`**, dynamic request-time sitemaps and **no database queries during compilation**.
-- Real local Supabase workflows passed **3/3** in **2.4 minutes** at 390, 768 and 1440 px: Auth, Chapra/venue creation, uploads, cover/reorder/delete, publish/unpublish and cleanup, with axe and no-overflow checks after the table-wrapper fix. **This run preceded the sitemap refactor**; post-refactor SEO coverage is unit/public tests, not a rerun of authenticated acceptance.
-- Fresh public fixtures cover **all six widths**: `many` **166 passed / 1 skip**, `empty` **95 passed / 28 skips**, `one` **120 passed / 21 skips**. **Total: 381 passed / 50 intentional, inapplicable skips**, no failures.
-- The planned review branch is **`audit/second-pass-2026-09-09`**, **not yet pushed**; its new hosted CI result is pending. **Do not promote production or force a launch** while the security, API, admin and editorial gates remain open.
+- Actual Preview smoke at original `2072dc7` found a **sanitized 500 without a leak** on unconfigured `/api/admin/city-catalog`. Published fix [9db51bd](https://github.com/RichardHenryJames/shagun/commit/9db51bd5b0a11395d62401353fde3e0db03a59fe) adds an `isConfigured` guard before client construction, returning private/no-store, noindex **503** with no catalog data. Configured fresh Auth/allowlist checks are unchanged; no SQL/shared settings changed. The old preview was **not all green**.
+- **After the fix**, `npm run check` passed **952 tests across 14 files**, including **60 catalog tests** (two new missing-URL/key cases) and **19 request-time sitemap tests**. The normal `npm run build` **passed with `SHAGUN_TEST_FIXTURES=false`**, dynamic request-time sitemaps and **no database queries during compilation**. Actual local valid/malformed catalog requests confirmed the private 503 contract, and the honest empty localhost:3000 home was restored.
+- The **Windows public matrix before the final catalog-only guard** covers all six widths: `many` **166/1**, `empty` **95/28**, `one` **120/21** (passed/skipped), totaling **381 passes / 50 intentional, inapplicable skips**. Historical Windows real-service **3/3** preceded the sitemap refactor; separate hosted Node 24 **3/3 at `2072dc7`** supplies post-sitemap Auth/Storage evidence. Hosted fixture CI covered only `many`, not the whole Windows matrix.
+- **Review publication succeeded:** [audit/second-pass-2026-09-09](https://github.com/RichardHenryJames/shagun/tree/audit/second-pass-2026-09-09) contains `9db51bd`. Both application revisions passed their own hosted jobs; the final fix also passed actual Preview smoke, including the corrected catalog response. Exact runs/counts are in [docs/VERIFICATION.md](docs/VERIFICATION.md). Deployment is **Preview, not Production**; GitHub `main` remains at `b62d6ed` and user-local `main` at `b066ed5`.
+- **Do not promote `main`/Production or force a launch** while the critical shared-security, API, real-admin, reviewed-inventory and full managed-acceptance/recovery gates remain open.
 
 [docs/VERIFICATION.md](docs/VERIFICATION.md) separates completed evidence from pending results. [docs/AUDIT.md](docs/AUDIT.md) records fixes and confirmed launch blockers; it does not claim that every exploratory suggestion was a bug.
 
@@ -60,7 +61,7 @@ Use **Node 24** and `npm ci` from this root. The supported engine range is `>=22
 | Public fixture QA | `http://localhost:3100`, no database | Explicitly labelled `empty`, `one` or `many` fixtures; matching build and runtime scenario required. |
 | Real local integration | Next at `http://localhost:3200`; Supabase API `http://127.0.0.1:55321`, database port **55322** | Real local Auth, REST, Storage and PostgreSQL; `SHAGUN_TEST_FIXTURES=false`; owned disposable project only. |
 
-The final normal build passed. Restoration of the default port-**3000** preview is being checked; its current availability is **not yet confirmed**.
+After the catalog guard, the normal production build passed with `SHAGUN_TEST_FIXTURES=false`; the restored browser preview at `http://localhost:3000/` confirmed the honest empty preparation state without synthetic warnings or inventory and remains running.
 
 For ordinary development, use `npm run dev`. For the normal preview, build with `npm run build`, then use the existing preview task or `npm run start -- --hostname localhost`. Builds do not migrate, seed or provision managed services.
 
@@ -81,7 +82,7 @@ The local Auth configuration deliberately combines `auth.email.enable_signup=tru
 
 All modes share generated build output. Stop the relevant preview before rebuilding, keep ports free for the owning test process and never hand-edit QA origins or reuse a mismatched build. After either test mode, rebuild normally before restarting the default preview. Never deploy fixture or integration output.
 
-CI now defines **two jobs**: Node **22** quality/fixture checks, then Node **24** real local Auth/Storage workflows using Docker. The authenticated job avoids credential/trace/dump artifacts and always attempts to stop its own integration stack. Its hosted run on the new review branch is **pending**, not covered by older CI passes.
+CI defines **two jobs**: Node **22** quality/fixture checks, then Node **24** real local Auth/Storage workflows using Docker. The authenticated job avoids credential/trace/dump artifacts and always attempts to stop its own integration stack. Both jobs passed independently for original `2072dc7` and the final catalog fix `9db51bd`, including post-sitemap authenticated workflows. Revision-specific hosted counts and Preview evidence are canonical in [docs/VERIFICATION.md](docs/VERIFICATION.md); none authorize production promotion.
 
 ## Release and operator documentation
 

@@ -1,6 +1,6 @@
 # Shagun — product and technical architecture
 
-**As of 2026-09-09:** all five migrations and the draft seed are installed in the approved shared Supabase project. Real local-service workflows passed, but confirmed critical sibling API exposure, missing Shagun API exposure, no approved production admin and no reviewed inventory block production promotion. Source publication is review-branch-only. Current counts and pending results belong in [VERIFICATION.md](VERIFICATION.md).
+**As of 2026-09-09:** all five migrations and the draft seed are installed in the approved shared Supabase project. Confirmed critical sibling API exposure, missing Shagun API exposure, no approved production admin and no reviewed inventory block production promotion. The review branch is published through `9db51bd`; hosted audit checks passed for original `2072dc7`. Follow-up code status, Preview evidence and revision-scoped counts belong in [VERIFICATION.md](VERIFICATION.md). Source publication remains review-branch-only; no SQL/shared settings changed with the catalog follow-up.
 
 ## Product judgment
 
@@ -51,6 +51,8 @@ SQL installation does not configure hosted Data API exposure: the zero-row `shag
 ## City catalog and saved discovery preview
 
 The checked-in GeoNames snapshot has **7,112 Indian populated places and 36 represented states/territories**, with CC BY 4.0 attribution. It is server-only selection data, not inventory, a census or an exhaustive place list. The authenticated catalog API returns bounded matches and source-derived state options; the browser never receives the entire snapshot. See [../data/geography/README.md](../data/geography/README.md).
+
+For unconfigured `/api/admin/city-catalog` requests, `isConfigured` now guards **before client construction**: a missing Supabase URL/public key returns sanitized **503**, private/no-store and noindex, with no catalog data. Configured requests retain fresh managed Auth and active-UUID allowlist checks. The actual original Preview 500 and subsequent local guard verification are recorded in [VERIFICATION.md](VERIFICATION.md).
 
 The admin combobox supports state filtering, explicit selection and manual entry. `saveCityAction` looks up the selected ID, validates state/India and stores the reserved scalar `metadata.geographic_source_id`. It preserves saved associations and launched URLs rather than trusting posted labels or free metadata. A missing retired source does not silently detach an existing record. The public selector remains native GET search over active city inventory, **24 per page**.
 
@@ -126,11 +128,11 @@ Canonical city and venue routes resolve availability in blocking `generateMetada
 
 ## Deployment and cost
 
-Deployment uses Vercel's **Node runtime** and the approved shared Supabase project; no container or always-on application worker is required. Docker hosts only the isolated local/CI integration stack. Production settings are saved, and the final normal `npm run build` **passed with fixtures false**, dynamic request-time sitemaps and **no database queries during compilation**. Builds never migrate, seed or provision users. Managed/hosted acceptance remains open; the planned `audit/second-pass-2026-09-09` review branch is not yet pushed. Do not promote production or force launch around the shared-security gate.
+Deployment uses Vercel's **Node runtime** and the approved shared Supabase project; no container or always-on application worker is required. Docker hosts only the isolated local/CI integration stack. Production settings are saved, and the normal build **passed after the catalog guard with fixtures false**, dynamic request-time sitemaps and **no database queries during compilation**. Builds never migrate, seed or provision users. The review branch is published; original `2072dc7` hosted checks passed. Follow-up status and the observed Preview/non-Production deployment with unchanged remote/local `main` are recorded in [VERIFICATION.md](VERIFICATION.md). Managed acceptance remains open; do not promote production or force launch around the shared-security gate.
 
-The **3/3 real local-service workflow pass preceded the sitemap refactor**; the new SEO behavior has unit/public-test coverage afterward, not a rerun of authenticated or managed acceptance. Exact results are in [VERIFICATION.md](VERIFICATION.md).
+The historical Windows **3/3** real-service run preceded the sitemap refactor; separate hosted Node 24 workflows **passed after it at `2072dc7`**. That supplies post-sitemap Auth/Storage evidence for the original audit, not the later guard or managed production acceptance. Exact scopes remain in [VERIFICATION.md](VERIFICATION.md).
 
-Keep three local modes distinct: normal/no-database preview on 3000, labelled database-free fixtures on 3100, and real local Supabase integration with Next on 3200. Normal preview restoration is being checked; port-3000 availability is not yet confirmed. The local Auth provider configuration is intentionally test-owned, not a shared Auth policy template. Exact commands, origins and process ownership are in [../README.md](../README.md). Release gates and **historical planning estimates, not fresh prices**, are in [DEPLOYMENT.md](DEPLOYMENT.md).
+Keep three local modes distinct: normal/no-database preview on 3000, labelled database-free fixtures on 3100, and real local Supabase integration with Next on 3200. After the guard fix, the normal localhost:3000 preview was restored and confirmed honestly empty, without synthetic warnings or inventory. The local Auth provider configuration is intentionally test-owned, not a shared Auth policy template. Exact commands, origins and process ownership are in [../README.md](../README.md). Release gates and **historical planning estimates, not fresh prices**, are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Principal launch risks
 

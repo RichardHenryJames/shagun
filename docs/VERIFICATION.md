@@ -1,19 +1,20 @@
 # Shagun — verification record
 
-**Evidence cutoff: 2026-09-09; runs span 8–9 September.** This records supplied execution results and locally inspected source, not an inferred total session duration. The documentation update itself ran no commands, tests, builds, database operations, new service probes or deployments. A passing result applies only to its stated environment and scope.
+**Evidence cutoff: 2026-09-09; runs span 8–9 September.** This records supplied execution results, local evidence and confirmed GitHub branch/run metadata, not an inferred total session duration. Local tests, managed SQL/HTTP checks, review publication and hosted CI have distinct environment/revision boundaries. A passing result applies only to its stated environment and scope.
 
 ## Results and final-update labels
 
-Preserve the completed results below. Only `FINAL_RELEASE_RESULT` remains pending in this table; record push and hosted outcomes only after confirmation, without extrapolating counts or reusing old single-width results.
+`FINAL_RELEASE_RESULT` distinguishes **successful review publication**, **passed hosted checks for both application revisions**, and **blocked production**. The follow-up code's own completed hosted run is recorded in `FOLLOW_UP_HOSTED_CI_RESULT` below; it is not inferred from the original audit or local passes. Documentation-only follow-up commits do not change these tested application revisions or authorize a release.
 
 | Label | Recorded result / next evidence |
 | --- | --- |
-| `FINAL_CHECK_RESULT` | **PASS:** `npm run check` passed lint, route type generation, strict typecheck and **950 tests across 14 files**, including **19 added request-time sitemap tests** and the integration-reset guards. |
+| `FINAL_CHECK_RESULT` | **PASS after `9db51bd`:** `npm run check` passed lint, route type generation, strict typecheck and **952 tests across 14 files**. The **60 catalog tests** include two new missing-URL/missing-public-key cases; the **19 request-time sitemap tests** and integration-reset guards remain included. |
 | `LOCAL_INTEGRATION_BUILD` | **PASS:** `npm run build:integration`, a production-mode Next build for the exact local Supabase/localhost:3200 environment, fixtures disabled, before the sitemap refactor. Not a normal release build or deployment. |
-| `LOCAL_INTEGRATION_BROWSER` | **PASS:** `npm run test:integration` completed **3/3 workflows**, at **390, 768 and 1440 px**, **11 substeps each**, in **2.4 minutes**, after the `.a-table-wrap` positioning fix and **before the sitemap refactor**. Real local Auth, REST, PostgreSQL and Storage plus signed-in axe/no-overflow checks were used; this workflow was not rerun afterward. |
-| `FINAL_NORMAL_BUILD_RESULT` | **PASS:** normal `npm run build` for the final code with **`SHAGUN_TEST_FIXTURES=false`**. Request-time sitemaps are dynamic, with **no database queries during compilation**; builds never migrate, seed or provision users. |
-| `FINAL_FIXTURE_MATRIX_RESULT` | **PASS:** fresh `many` **166/1**, `empty` **95/28**, and `one` **120/21**, all at **six widths** (passed/skipped). **381 passes / 50 intentional, inapplicable skips**, no failures. |
-| `FINAL_RELEASE_RESULT` | **PENDING, REVIEW BRANCH ONLY:** planned **`audit/second-pass-2026-09-09` is not yet pushed**. Record the actual push/revision and new hosted CI result, adding a push URL only once confirmed. **Production promotion/force launch is blocked** by the confirmed shared-security and operator/editorial gates. Saved variables and old CI/deployment results do not close them. |
+| `LOCAL_INTEGRATION_BROWSER` | **PASS:** `npm run test:integration` completed **3/3 workflows on Windows**, at **390, 768 and 1440 px**, **11 substeps each**, in **2.4 minutes**, after the `.a-table-wrap` positioning fix and **before the sitemap refactor**. Real local Auth, REST, PostgreSQL and Storage plus signed-in axe/no-overflow checks were used. This Windows run was not repeated afterward; the separate hosted `2072dc7` run supplies post-sitemap Auth evidence below. |
+| `FINAL_NORMAL_BUILD_RESULT` | **PASS after `9db51bd`:** normal `npm run build` with **`SHAGUN_TEST_FIXTURES=false`**. Request-time sitemaps are dynamic, with **no database queries during compilation**; builds never migrate, seed or provision users. The normal localhost:3000 empty preview was restored and confirmed afterward. |
+| `FINAL_FIXTURE_MATRIX_RESULT` | **PASS, Windows matrix before the final catalog-only guard:** `many` **166/1**, `empty` **95/28**, and `one` **120/21**, all at **six widths** (passed/skipped). **381 passes / 50 intentional, inapplicable skips**, no failures. Hosted audit CI ran only `many`, not this whole matrix. |
+| `FOLLOW_UP_HOSTED_CI_RESULT` | **PASS, both jobs:** [run 34322083604](https://github.com/RichardHenryJames/shagun/actions/runs/34322083604) completed successfully at **`9db51bd5b0a11395d62401353fde3e0db03a59fe`**. Actual logs confirm Node 22 full check **952 tests / 14 files**, `many` public fixtures **166 passed / 1 skipped**, and Node 24 real isolated Auth/Storage workflows **3 passed in 1.8 minutes**, followed by successful stack shutdown. |
+| `FINAL_RELEASE_RESULT` | **REVIEW PUBLICATION: SUCCESS / FINAL APPLICATION CI: PASS / PRODUCTION: BLOCKED.** Published [audit/second-pass-2026-09-09](https://github.com/RichardHenryJames/shagun/tree/audit/second-pass-2026-09-09) contains the tested follow-up [9db51bd](https://github.com/RichardHenryJames/shagun/commit/9db51bd5b0a11395d62401353fde3e0db03a59fe), not just original `2072dc7`. Its own hosted CI and Preview smoke passed within their stated scopes. Only Preview deployment is recorded; remote/local `main` remain unchanged as detailed below. Critical shared-security, API, real-admin, reviewed-inventory and full managed-acceptance/recovery gates remain open. |
 
 Toolchain: Windows, locally tested Node **24**; pinned Next.js **16.3.3**, TypeScript **5.9.3** and development-only Supabase CLI **2.116.0**. Reproduce with [../package.json](../package.json) and [../package-lock.json](../package-lock.json).
 
@@ -62,9 +63,9 @@ The public publishable key was **momentarily revealed in the browser UI**, used 
 
 Shagun must be appended to the existing exposed-schema list, preserving **every** other entry and excluding `shagun_private`. The expired dashboard session's management request returned **401**; the official sign-in page is visible, but the GitHub button did not navigate. The user must complete sign-in privately. No API-list or shared Auth change was made by these probes.
 
-**Release decision:** push to a **review branch only**, with push/hosted CI still pending. Do not promote production, force launch, fabricate an admin/review or run a production Hazaribag import while these gates remain open. Exact owner/operator steps are in [DEPLOYMENT.md](DEPLOYMENT.md).
+**Release decision:** review publication and the original audit's hosted CI pass do not clear these gates. Do not promote `main`/Production, force launch, fabricate an admin/review or run a production Hazaribag import while they remain open. Exact owner/operator steps are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-## Latest real local-service browser workflow — 3 PASSED
+## Windows real local-service browser workflow — historical 3 PASSED
 
 [../tests/integration/admin-workflow.spec.ts](../tests/integration/admin-workflow.spec.ts) executes the following **11 substeps at each of 390, 768 and 1440 px**. These are three complete workflow tests, not 33 independently counted tests.
 
@@ -86,15 +87,17 @@ With CLI **2.116.0**, local `auth.email.enable_signup=true` enables the email/pa
 
 The suite uses one worker, no retries and test-owned Next server lifecycle. The first-use reset guard checks all schemas/bucket/policy targets before recording ownership; both source tests pass in the full check. Signed-in dashboard, city picker, venue editor, photo manager and public-layout previews pass axe and page-overflow checks at all three widths. An absolutely positioned screen-reader label had escaped its table scroller; **`position: relative` on `.a-table-wrap`** fixes the cause without hiding page overflow or weakening assertions. The **2.4-minute, 3/3 pass is after that fix and those checks**. See [../src/app/admin/admin.css](../src/app/admin/admin.css), [../scripts/integration.ts](../scripts/integration.ts), [../playwright.integration.config.ts](../playwright.integration.config.ts).
 
-**Timing:** this real local Supabase run **preceded the request-time sitemap refactor**. The authenticated workflow was not rerun afterward; post-refactor SEO evidence is the sitemap unit tests and public fixture tests, not managed acceptance.
+**Timing:** this Windows run **preceded the request-time sitemap refactor**. Separate Node 24 hosted runs passed **3 workflows in 1.9 minutes at `2072dc7`** and **3 workflows in 1.8 minutes at `9db51bd`**, after the sitemap refactor and, for the latter, the catalog guard. Those runs add real isolated-service evidence for their revisions, not managed-project acceptance.
 
 **SEO boundary:** localhost HTTP is intentionally non-indexable. Canonicals and anonymous `sitemap_entries` eligibility were checked, while robots disallowed crawling and sitemap requests returned 404. This is not verification of production HTTPS sitemap XML, secure cookies or CDN behavior.
+
+**Local integration shutdown:** `npm run integration:stop` succeeded; `docker ps` showed only the unrelated `biharibhojan-db` container still running. Local test data was retained.
 
 ## Unit/database tests versus service tests
 
 `npm run check` covers local validation, authorization/action/route contracts, Sharp image handling, catalog/preview behavior and SQL migrations, grants, lifecycle, exact optimistic versions, upload reservations and cleanup. PGlite uses synthetic managed-schema scaffolding and a single connection; mocked route/action clients are not live Supabase. The separate workflow above adds actual local Auth/REST/Storage evidence, not managed-project certification.
 
-The complete **950-test / 14-file** run includes the **19 request-time sitemap tests** and both reset guards; counts are supplied execution results, not inferred from added tests. The malformed-ZIP advisory in the city-import dependency was fixed by pinning `fflate` **0.8.3**; the subsequent package-manager audit reported **zero vulnerabilities**. Supabase CLI remains **2.116.0**.
+The post-fix local **952-test / 14-file** run includes **60 catalog tests**, **19 request-time sitemap tests** and both reset guards. The original hosted audit ran **950 tests / 14 files before the two catalog regressions were added**; these are supplied execution counts, not inferred totals. The malformed-ZIP advisory in the city-import dependency was fixed by pinning `fflate` **0.8.3**; the subsequent package-manager audit reported **zero vulnerabilities**. Supabase CLI remains **2.116.0**.
 
 ### Request-time sitemap regression coverage — 19 tests
 
@@ -102,9 +105,9 @@ The complete **950-test / 14-file** run includes the **19 request-time sitemap t
 - Tests cover index/partition boundaries, pagination and limits, XML escaping, noindex/local **404s**, invalid/private rows and sanitized no-store **503s** on invalid data or service failures. These are local contracts, not proof of managed HTTPS output.
 - Async [../src/app/robots.ts](../src/app/robots.ts) makes **no database request** and advertises **one index URL**, `/sitemap.xml`, when indexing is enabled; it does not enumerate partition URLs.
 
-## Fresh public fixture matrix — all scenarios passed
+## Windows public fixture matrix — all scenarios passed before the catalog guard
 
-These are the supplied fresh Chromium results at **all six configured widths**, not the older single-width empty/one runs:
+These supplied Windows Chromium results cover **all six configured widths and all three scenarios before the final catalog-only guard**. They are not the older single-width empty/one runs or a hosted all-scenario matrix; original audit CI ran only `many`.
 
 | Scenario | Widths | Passed | Intentional skips |
 | --- | --- | ---: | ---: |
@@ -117,20 +120,59 @@ The many-scenario desktop skip excludes a mobile-only interaction; empty/one ski
 
 An earlier local fixture Lighthouse run recorded **99 performance / 100 accessibility**; it is historical, not fresh or final-domain evidence.
 
-Reproduction commands and the separate default-3000/fixture-3100/integration-3200 contracts are in [../README.md](../README.md). The normal build passed; default port-3000 preview restoration is being checked, and current availability is not yet confirmed. Never reuse a mismatched build or weaken assertions to obtain a pass.
+Reproduction commands and the separate default-3000/fixture-3100/integration-3200 contracts are in [../README.md](../README.md). After the catalog fix, the normal build passed with `SHAGUN_TEST_FIXTURES=false` and the browser at `http://localhost:3000/` again confirmed the honest empty preparation state, with no synthetic warning or inventory. The restored normal preview remains running. Never reuse a mismatched build or weaken assertions to obtain a pass.
 
-## CI definition versus hosted execution
+## Published review revisions and hosted evidence
 
-[../.github/workflows/ci.yml](../.github/workflows/ci.yml) now defines **two jobs**: Node **22** quality checks and database-free public fixtures, followed by Node **24** real local Auth/publishing/Storage workflows on an isolated Docker-backed Supabase stack. The authenticated job does not output credentials or attach Auth traces, populated form snapshots or database dumps, and its stop step runs with `always()` to clean up only that integration stack. No production credentials or managed test records are required.
+[../.github/workflows/ci.yml](../.github/workflows/ci.yml) runs Node **22** quality checks/database-free public fixtures, then Node **24** real local Auth/publishing/Storage workflows on an isolated Docker-backed Supabase stack. The authenticated workflow suppresses credentials, Auth traces, populated form snapshots and database dumps; its stop step uses `always()` to clean up only that stack. No production credentials or managed test records are required.
 
-**The planned `audit/second-pass-2026-09-09` review branch is not yet pushed; its hosted two-job result is pending.** Initial-commit [hosted CI run 34222982087](https://github.com/RichardHenryJames/shagun/actions/runs/34222982087) passed for `2edd4fd`, with no hosted counts fetched; it does not certify this new workflow or tree. A review-branch CI pass will not by itself authorize production promotion.
+**Review publication — SUCCESS:** [audit/second-pass-2026-09-09](https://github.com/RichardHenryJames/shagun/tree/audit/second-pass-2026-09-09) contains the published follow-up commit **`9db51bd5b0a11395d62401353fde3e0db03a59fe`**. It follows original audit commit **`2072dc7f8aba3e492d448c94d703450aa0312a75`**, whose local/GitHub branch SHA match was confirmed at its publication. The final code is therefore not the original audit revision.
+
+### Original audit hosted CI — SUCCESS at `2072dc7`
+
+[Run 34320416797](https://github.com/RichardHenryJames/shagun/actions/runs/34320416797) **succeeded in both jobs**. Actual hosted logs confirmed:
+
+| Job | Confirmed execution at `2072dc7` |
+| --- | --- |
+| Node **22** quality/public fixtures | Full check **950 tests / 14 files**; `many` fixture scenario **166 passed / 1 skipped**. No hosted `empty`/`one` matrix is claimed. |
+| Node **24** real local Auth/Storage | Auth, Chapra/venue creation, media, publishing and cleanup: **3 passed in 1.9 minutes**, **after the sitemap refactor at this commit**. These are real isolated services hosted by CI, not managed production acceptance. |
+
+This closes the original audit CI check. The later code has its own successful run in `FOLLOW_UP_HOSTED_CI_RESULT` above, including the two new regressions and all three configured Auth workflows. Initial [run 34222982087](https://github.com/RichardHenryJames/shagun/actions/runs/34222982087), which passed for `2edd4fd` without fetched hosted counts, remains earlier history.
+
+### Actual Vercel Preview smoke — `2072dc7`, one defect found
+
+GitHub deployment **6344149398** records `environment: Preview`, **`production_environment: false`** and state **`success`** for `2072dc7`. The actual preview was [https://shagun-hs7en3zi0-richards-projects-224a1dea.vercel.app](https://shagun-hs7en3zi0-richards-projects-224a1dea.vercel.app).
+
+| Actual preview surface | Observed response |
+| --- | --- |
+| `/` | Honest empty preparation state. |
+| `/cities`, `/search` | **200**, noindex. |
+| Missing city URL and `/city/hazaribag` | **404**, noindex. |
+| `/admin/login` | **200**, noindex. |
+| `/robots.txt` | **200**, disallow all. |
+| `/sitemap.xml` | **404**. |
+| Unconfigured `/api/admin/city-catalog` | Sanitized **500**, no leak; this actual smoke finding led to the later fix. |
+
+**This was not an all-green preview smoke.** Deployment state `success` did not negate the catalog 500. These observations remain scoped to `2072dc7`; the corrected catalog response below was checked locally, not retroactively verified on this old preview.
+
+### Catalog follow-up — `9db51bd`, local and hosted checks passed
+
+The published fix adds an **`isConfigured` guard before client construction**: a missing Supabase URL or public key returns **503**, private/no-store and noindex, with no catalog data. The configured path retains fresh managed Auth and active-UUID allowlist checks unchanged. Two new unit cases cover missing URL and missing key; no SQL or shared settings changed. This corrects an unconfigured response-status defect, not a demonstrated data leak or Auth bypass.
+
+After the fix, the full local check and normal fixtures-false build passed as recorded above. Actual localhost:3000 catalog requests with **valid and malformed queries** both returned **503**, `Cache-Control: private, no-store`, noindex and the **exact asserted non-secret error message**, with no catalog data. The normal empty home was restored and confirmed. The final-code hosted pass was independently confirmed through run metadata and the exact log totals above.
+
+GitHub deployment **6344431243** records `environment: Preview`, **`production_environment: false`** and state **`success`** for `9db51bd`, at [https://shagun-ykfvegpke-richards-projects-224a1dea.vercel.app](https://shagun-ykfvegpke-richards-projects-224a1dea.vercel.app). Its actual browser smoke passed all asserted responses: empty home; cities/search and admin login **200/noindex**; missing city and Hazaribag **404/noindex**; sitemap **404/noindex**; robots **200/disallow all**; and both valid/malformed catalog queries **503/private/no-store/noindex**, containing only the exact non-secret setup error and no catalog data. This confirms the original preview defect is fixed on the new deployment. It does not establish a configured managed admin session or production inventory behavior.
+
+### Observed promotion boundary
+
+The GitHub `main` API confirmed the remote branch unchanged at **`b62d6eda5fde1fe5e588ef3a4b2a5cdeb4693908`**; the user's local `main` remains at **`b066ed5`**. Only the recorded **Preview/non-Production** deployment is established; no production promotion occurred. The Vercel production-branch setting itself was not fetched, so these observations are not a global provider-setting claim. **Do not promote `main` or Production.**
 
 ## Remaining evidence required
 
 - **Critical shared Order/ContactMessage exposure:** separately authorized owner remediation and safe verification without retrieving customer rows; preserved baseline flags are not clearance.
 - User dashboard sign-in, append-only Shagun API exposure preserving other entries/private exclusion, and real anonymous/ordinary/admin/revoked REST/RPC/Storage checks.
 - Human-provisioned managed admin, hosted login/refresh/expiry/recovery and revocation; approved real research import/review and any photo permissions.
-- Actual **review-branch** push/hosted CI remains to be recorded. Final normal build and all three six-width fixture scenarios now pass. Later owner-gated hosted acceptance still needs HTTPS metadata/sitemaps, secure cookies, image caching, six-width accessibility and performance; no production promotion now.
+- **Managed HTTPS acceptance:** final-code hosted CI and Preview smoke passed, but preserve the Windows matrix's pre-catalog-guard scope. Owner-gated managed acceptance still needs HTTPS inventory metadata/sitemaps, secure cookies, image caching, six-width accessibility and final-domain performance; the unconfigured Preview smoke is not production acceptance.
 - Multiple real concurrent editor sessions, lock/quota/finalization races and managed-provider partial-upload/cleanup failure paths.
 - Supported recovery of current database, object bytes, Auth identities/settings, roles/permissions and deployment configuration. The public-only scratch restore closes only its stated limited check.
 

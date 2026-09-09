@@ -1,6 +1,6 @@
 # Shagun — interface design
 
-**As of 2026-09-09:** production promotion is blocked by the confirmed shared-security and operator/editorial gates in [AUDIT.md](AUDIT.md). Local previews and test inventory are not a public launch.
+**As of 2026-09-09:** the [audit/second-pass-2026-09-09](https://github.com/RichardHenryJames/shagun/tree/audit/second-pass-2026-09-09) review branch is published through [9db51bd](https://github.com/RichardHenryJames/shagun/commit/9db51bd5b0a11395d62401353fde3e0db03a59fe); hosted audit checks passed for original `2072dc7`. Follow-up code status and actual Preview evidence are in [VERIFICATION.md](VERIFICATION.md). Production promotion remains blocked by the shared-security and operator/editorial gates in [AUDIT.md](AUDIT.md). Review publication, previews and test inventory are not a public launch.
 
 ## Visual direction
 
@@ -18,6 +18,8 @@ Administration uses neutral surfaces, compact tables, clear lifecycle labels, se
 - Support arrows, Enter, Escape, visible focus, loading/errors/retry and stale-request cancellation. The combobox displays at most 12 results; narrowing is preferable to an enormous dropdown.
 - Preserve GeoNames/CC BY 4.0 attribution. The server validates the selected ID and stores `metadata.geographic_source_id`; it is not an editable provenance field.
 - Catalog availability, saved city lifecycle and venue publication are separate concepts. Existing editorial spellings and locked URLs are not renamed by catalog selection.
+
+Missing Supabase URL/public-key configuration now returns a sanitized **503** from the catalog API before client construction, private/no-store and noindex, without catalog data. Do not confuse this unavailable state with no search matches or bypass configured fresh Auth/allowlist checks.
 
 Sources: [../src/components/admin/city-picker.tsx](../src/components/admin/city-picker.tsx), [../src/components/admin/city-form.tsx](../src/components/admin/city-form.tsx), [../data/geography/README.md](../data/geography/README.md).
 
@@ -49,8 +51,8 @@ Preserve oriented image aspect ratios, explicit dimensions and responsive deriva
 
 ## Evidence boundary
 
-Real local Supabase workflows passed **3/3** in **2.4 minutes** at **390, 768 and 1440 px**, after the table-wrapper fix, including signed-in axe/no-overflow checks, Auth, Chapra/venue creation, previews, uploads, cover/reorder/delete, publish/unpublish and cleanup. **This run preceded the sitemap refactor**; post-refactor SEO coverage is unit/public tests, not a rerun of authenticated acceptance.
+Windows real Supabase workflows passed **3/3** at **390, 768 and 1440 px**, after the table-wrapper fix with signed-in axe/no-overflow checks, **before the sitemap refactor**. Separate hosted Node 24 Auth/Chapra/venue/media/publishing/cleanup workflows passed **after the sitemap refactor at `2072dc7`**; this is not managed acceptance or evidence for the later guard.
 
-Fresh public `many` (**166 passed / 1 skip**), `empty` (**95 passed / 28 skips**) and `one` (**120 passed / 21 skips**) each cover **320, 375, 390, 414, 768 and 1440 px**. **Total: 381 passed / 50 intentional, inapplicable skips**, no failures.
+The **Windows public matrix before the final catalog-only guard** covers `many` (**166/1**), `empty` (**95/28**) and `one` (**120/21**) at **320, 375, 390, 414, 768 and 1440 px** (passed/skipped). **Total: 381 passes / 50 intentional, inapplicable skips**. Original hosted fixture CI ran only `many`, not this entire matrix.
 
-The final normal `npm run build` **passed with fixtures false**, dynamic request-time sitemaps and no database queries during compilation. These passes do not establish final-domain performance, physical-device behavior or full manual accessibility conformance. Default port-3000 preview restoration is being checked; current availability is not yet confirmed. See [VERIFICATION.md](VERIFICATION.md) for evidence and [../README.md](../README.md) for run modes.
+The post-fix local check and normal fixtures-false build passed; actual local catalog responses and the restored empty localhost:3000 home were confirmed. The original hosted Preview's sanitized catalog 500 was fixed later, so its smoke must not be called all green. These results do not establish final-domain performance, physical-device behavior or full manual accessibility conformance. See [VERIFICATION.md](VERIFICATION.md) for revision-scoped evidence and [../README.md](../README.md) for run modes.
