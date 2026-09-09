@@ -31,6 +31,17 @@ async function publicSitemap(client: LocalClient, paths: string[], safe: (body: 
   expect(result.items.every((item: unknown) => typeof record(item).updatedAt === "string")).toBe(true);
 }
 
+async function publicCitySuggestions(page: Page, query: string, visible: boolean, safe: (body: string) => void): Promise<void> {
+  const response = await page.request.get(`/api/cities/suggestions?${new URLSearchParams({ q: query })}`, API);
+  expect(response.status()).toBe(200);
+  expect(response.headers()["cache-control"]).toBe("no-store");
+  expect(response.headers()["x-robots-tag"]).toMatch(/noindex/);
+  expect(response.headers()["set-cookie"]).toBeUndefined();
+  const body: unknown = await response.json();
+  safe(JSON.stringify(body));
+  expect(body).toEqual({ items: visible ? [{ name: "Chapra", slug: "chapra", state: "Bihar" }] : [] });
+}
+
 async function mutation(page: Page, id: string, button: Locator, method: "PATCH" | "DELETE" = "PATCH"): Promise<void> {
   const [response] = await Promise.all([
     page.waitForResponse((value) => value.url() === `${INTEGRATION_ORIGIN}/api/admin/media/${id}` && value.request().method() === method),
@@ -163,6 +174,9 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inventory overview");
       await assertSignedOut(visitor, `${CITY_WORKSPACE}/preview`);
+      // Even an actual admin cookie cannot widen public suggestions to the draft seed.
+      await publicCitySuggestions(page, "haza", false, safe);
+      await publicCitySuggestions(visitor, "haza", false, safe);
     }, { timeout: 60_000 });
 
     await test.step("Prove non-admin Auth is insufficient and refuse any preexisting Chapra", async () => {
@@ -248,6 +262,23 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       await expect(page.getByRole("heading", { name: "0 venues to explore", exact: true })).toBeVisible();
       await expect(page.locator(".sh-city-page")).toHaveCount(1);
       await visitPublic(visitor, CITY_PATH, 404, safe);
+      await publicCitySuggestions(visitor, "Chap", false, safe);
+    });
+
+    await test.step("Upload a genuine local city cover, preview it privately, and keep the draft image inaccessible", async () => {
+      await page.goto(`${CITY_WORKSPACE}/edit`);
+      const image = (await generatedImages(`${owned.token}-city`))[0];
+      const cover = await uploadPhoto(page, owned, image, "city");
+      expect(cover.city_id).toBe(owned.cityId);
+      expect(cover.venue_id).toBeNull();
+      expect(cover.is_cover).toBe(true);
+      await assertStoredVariants(observer, cover.storage_key, true);
+      for (const width of [480, 960, 1600]) await assertImageResponse(await page.request.get(`/api/admin/media/${cover.id}?w=${width}`, API), true, width);
+      expect((await visitor.request.get(`/media/${cover.id}/480`, API)).status()).toBe(404);
+      await assertDenied(await ordinaryPage.request.get(`/api/admin/media/${cover.id}?w=480`, API));
+      await auditLayout(page);
+      await assertPreview(page, `${CITY_WORKSPACE}/preview`, "Chapra.", safe);
+      await loadedImage(page.getByRole("region", { name: "Photographs of Chapra", exact: true }).getByRole("img", { name: image.alt, exact: true }));
     });
 
     await test.step("Add the associated venue through the workspace and save private research atomically", async () => {
@@ -384,6 +415,7 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       await loadedImage(page.locator(".sh-venue-card").getByRole("img", { name: owned.photos[1].alt_text, exact: true }));
       await visitPublic(visitor, CITY_PATH, 404, safe);
       await visitPublic(visitor, `${CITY_PATH}/vivah-bhawan/${owned.venueSlug}`, 404, safe);
+      await publicCitySuggestions(visitor, "Chap", false, safe);
       expect((await visitor.request.get(`/media/${owned.photos[1].id}/480`, API)).status()).toBe(404);
       await publicSitemap(anonymous, [], safe);
       const blockedResearch = await anonymous.from("venue_research").select("source_notes").eq("venue_id", owned.venueId!);
@@ -404,11 +436,36 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       await expect(publicPage.getByRole("heading", { name: "1 venue to explore", exact: true })).toBeVisible();
       await expect(publicPage.getByRole("navigation", { name: "Breadcrumb", exact: true })).toContainText("Chapra");
       await expect(venueNames(publicPage)).toHaveText([owned.venueName]);
+      const cover = owned.cityPhotos[0];
+      await loadedImage(publicPage.getByRole("region", { name: "Photographs of Chapra", exact: true }).getByRole("img", { name: cover.alt_text, exact: true }));
+      await assertImageResponse(await publicPage.request.get(`/media/${cover.id}/480`, API), false);
       const rows = checked(await anonymous.from("venues").select("id,city_id,status").eq("id", owned.venueId!), "Anonymous REST published inventory");
       expect(rows).toEqual([{ id: owned.venueId, city_id: owned.cityId, status: "published" }]);
 
       await visitPublic(publicPage, "/", 200, safe);
-      await publicPage.getByRole("searchbox", { name: "Where are you celebrating?", exact: true }).fill("ChAp Bi");
+      await publicCitySuggestions(publicPage, "ChAp Bi", true, safe);
+      await publicCitySuggestions(ordinaryPage, "haza", false, safe);
+      const cityInput = publicPage.getByRole("combobox", { name: "Where are you celebrating?", exact: true });
+      const [suggested] = await Promise.all([
+        publicPage.waitForResponse((value) => {
+          const url = new URL(value.url());
+          return url.pathname === "/api/cities/suggestions" && url.searchParams.get("q") === "ChAp Bi";
+        }),
+        cityInput.fill("ChAp Bi"),
+      ]);
+      expect(suggested.status()).toBe(200);
+      safe(await suggested.text());
+      const suggestion = publicPage.getByRole("option", { name: "Chapra, Bihar", exact: true });
+      await expect(suggestion).toBeVisible();
+      await expect(publicPage.getByRole("listbox", { name: "City suggestions", exact: true }).getByRole("option")).toHaveCount(1);
+      await auditLayout(publicPage);
+      await cityInput.press("ArrowDown");
+      await expect(suggestion).toHaveAttribute("aria-selected", "true");
+      await cityInput.press("Enter");
+      await expect(publicPage).toHaveURL(`${INTEGRATION_ORIGIN}${CITY_PATH}`);
+      // Preserve the separate native GET path; autocomplete is not mandatory.
+      await visitPublic(publicPage, "/", 200, safe);
+      await publicPage.getByRole("combobox", { name: "Where are you celebrating?", exact: true }).fill("ChAp Bi");
       const [citySearch] = await Promise.all([
         publicPage.waitForResponse((value) => value.request().isNavigationRequest() && new URL(value.url()).pathname === "/cities"),
         publicPage.getByRole("button", { name: "Find my city", exact: true }).click(),
@@ -519,6 +576,8 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       await expect(venueNames(visitor)).toHaveCount(0);
       await visitPublic(visitor, CITY_PATH, 200, safe);
       await expect(visitor.getByRole("heading", { name: "0 venues to explore", exact: true })).toBeVisible();
+      // An active but now-empty guide remains public until deliberately deactivated.
+      await publicCitySuggestions(visitor, "Chap", true, safe);
       await assertWorkspaceCounts(page, 0, 0);
       await assertPreview(page, `${CITY_WORKSPACE}/preview`, "Chapra.", safe);
       await expect(venueNames(page)).toHaveCount(0);
@@ -535,6 +594,9 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       await expect(venueNames(visitor)).toHaveCount(0);
       await visitPublic(visitor, "/cities?q=Chapra", 200, safe);
       await expect(visitor.locator(".sh-city-card")).toHaveCount(0);
+      await publicCitySuggestions(visitor, "Chap", false, safe);
+      await publicCitySuggestions(page, "Chap", false, safe);
+      expect((await visitor.request.get(`/media/${owned.cityPhotos[0].id}/480`, API)).status()).toBe(404);
       expect(checked(await observer.from("venues").select("status").eq("id", owned.venueId!).single(), "Venue stays published under an inactive city")?.status).toBe("published");
       expect(checked(await anonymous.from("venues").select("id").eq("id", owned.venueId!), "Anonymous REST hides inactive-city venues")).toEqual([]);
       expect(checked(await ordinary().from("venues").select("id").eq("id", owned.venueId!), "Ordinary Auth still respects public RLS")).toEqual([]);

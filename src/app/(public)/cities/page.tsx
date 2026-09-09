@@ -7,9 +7,9 @@ import type { SearchParams } from "@/lib/types";
 import { filterParams, parseSearchParams } from "@/lib/validation";
 import { Breadcrumbs } from "@/components/public/breadcrumbs";
 import { CityCard } from "@/components/public/city-card";
+import { CitySearchBox } from "@/components/public/city-search-box";
 import { EmptyState } from "@/components/public/empty-state";
 import { Pagination, queryHref } from "@/components/public/pagination";
-import { SearchBox } from "@/components/public/search-box";
 import { JsonLd } from "@/components/public/structured-data";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +45,7 @@ export default async function CitiesPage({ searchParams }: { searchParams: Promi
         <p className="sh-eyebrow">A PLACE TO BEGIN</p>
         <h1 className="sh-display">Find your city.<br /><em>Begin your story.</em></h1>
         <p className="sh-page-intro">Local places for life’s big occasions. Choose a city guide to explore the venues and details that have been published so far.</p>
-        <SearchBox action="/cities" id="directory-search" query={filters.q} label="Search for a city" placeholder="City name" buttonLabel="Find a city" />
+        <CitySearchBox key={filters.q} id="directory-search" query={filters.q} label="Search for a city" placeholder="City name" buttonLabel="Find a city" />
       </header>
       <section className="sh-directory-results" aria-labelledby="city-results-title">
         <div className="sh-results-heading"><h2 id="city-results-title">{filters.q ? `City guides matching “${filters.q}”` : "Explore the city guides"}</h2>{directory.total > 0 && <p>{formatNumber(directory.total)} {directory.total === 1 ? "city guide" : "city guides"}</p>}</div>

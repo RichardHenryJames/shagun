@@ -173,7 +173,7 @@ export function newInventory(width: number) {
     privateMarker: `TEST_PRIVATE_${token}`,
     sourceNotes: `TEST_PRIVATE_${token}: Original generated local test data only. The reserved example telephone is not contacted. This is not real editorial research or a review of a real venue.`,
     cityId: undefined as string | undefined, venueId: undefined as string | undefined,
-    photos: [] as Photo[], citySaveStarted: false, venueSaveStarted: false, cleanupComplete: false,
+    photos: [] as Photo[], cityPhotos: [] as Photo[], citySaveStarted: false, venueSaveStarted: false, cleanupComplete: false,
     baseline: undefined as City | undefined,
   };
 }
@@ -470,8 +470,8 @@ const photoSchema = z.object({
   sort_order: z.number().int(), is_cover: z.boolean(), created_at: z.string(),
 });
 
-export async function uploadPhoto(page: Page, owned: OwnedInventory, image: GeneratedImage): Promise<Photo> {
-  const section = page.getByRole("region", { name: "Venue photos", exact: true });
+export async function uploadPhoto(page: Page, owned: OwnedInventory, image: GeneratedImage, owner: "venue" | "city" = "venue"): Promise<Photo> {
+  const section = page.getByRole("region", { name: owner === "city" ? "City cover & photos" : "Venue photos", exact: true });
   await field(section, "Choose images").setInputFiles({ name: image.name, mimeType: image.mimeType, buffer: image.buffer });
   await field(section, `Alternative text for ${image.name}`).fill(image.alt);
   await field(section, "Rights / provenance credit for this batch").fill(image.credit);
@@ -480,16 +480,20 @@ export async function uploadPhoto(page: Page, owned: OwnedInventory, image: Gene
     section.getByRole("button", { name: "Upload photos", exact: true }).click(),
   ]);
   expect(response.status()).toBe(201);
-  const parsed = photoSchema.safeParse(record(await response.json()).photo);
-  if (!parsed.success || parsed.data.venue_id !== owned.venueId) throw new Error("Upload did not confirm a photo owned by this run's UI-created venue.");
+  const schema = owner === "city" ? photoSchema.extend({ city_id: z.uuid(), venue_id: z.null() }) : photoSchema;
+  const parsed = schema.safeParse(record(await response.json()).photo);
+  if (!parsed.success || (owner === "city" ? parsed.data.city_id !== owned.cityId : parsed.data.venue_id !== owned.venueId)) {
+    throw new Error("Upload did not confirm a photo owned by this run's UI-created record.");
+  }
   // Capture before subsequent assertions: cleanup remains scoped even if the
   // UI refresh, decoded-size check or metadata expectation subsequently fails.
   const photo = parsed.data;
-  owned.photos.push(photo);
+  const photos = owner === "city" ? owned.cityPhotos : owned.photos;
+  photos.push(photo);
   expect(photo.alt_text).toBe(image.alt);
   expect(photo.credit).toBe(image.credit);
   expect([photo.width, photo.height]).toEqual([800, 500]);
-  await expect(section.getByRole("list", { name: "Saved photos in display order" }).getByRole("listitem")).toHaveCount(owned.photos.length);
+  await expect(section.getByRole("list", { name: "Saved photos in display order" }).getByRole("listitem")).toHaveCount(photos.length);
   await expect(section.getByRole("progressbar", { name: "Selected files successfully uploaded" })).toHaveAttribute("value", "1");
   await section.getByRole("button", { name: `Dismiss ${image.name} from upload queue`, exact: true }).click();
   return photo;
@@ -514,7 +518,7 @@ export async function assertImageResponse(response: APIResponse, privateImage: b
 
 export async function runOwnedStorageCleanup(page: Page, observer: LocalClient, owned: OwnedInventory): Promise<void> {
   const jobs = checked(await observer.from("storage_cleanup_jobs").select("id,storage_key,ready_at"), "Inspect cleanup ownership");
-  const roots = new Set(owned.photos.map((photo) => photo.storage_key));
+  const roots = new Set([...owned.photos, ...owned.cityPhotos].map((photo) => photo.storage_key));
   if (!jobs || jobs.some((job) => !roots.has(job.storage_key))) {
     throw new Error("Refusing the dashboard's global cleanup: an unowned reservation/job exists. The parent must inspect/reset the isolated run.");
   }
@@ -571,9 +575,10 @@ export async function cleanupOwned(page: Page, observer: LocalClient, owned: Own
       await deleteFromUI(page, "city", owned.cityId, "Chapra");
     }
     expect(checked(await observer.from("cities").select("id").eq("id", owned.cityId), "Confirm owned city deletion")).toEqual([]);
+    expect(checked(await observer.from("media_assets").select("id").eq("city_id", owned.cityId), "Confirm city cover cascade")).toEqual([]);
   }
   await runOwnedStorageCleanup(page, observer, owned);
-  for (const photo of owned.photos) await assertStoredVariants(observer, photo.storage_key, false);
+  for (const photo of [...owned.photos, ...owned.cityPhotos]) await assertStoredVariants(observer, photo.storage_key, false);
   if ((owned.citySaveStarted && !owned.cityId) || (owned.venueSaveStarted && !owned.venueId)) {
     throw new Error("A UI create result was not captured. No guessed ID was deleted; inspect/reset the isolated database before another run.");
   }

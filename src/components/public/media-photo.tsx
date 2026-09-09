@@ -24,8 +24,9 @@ export function MediaPhoto({
   const source = `${preview ? "private" : "public"}:${photo.id}`;
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const imageRef = useCallback((node: HTMLImageElement | null) => {
-    // An image can fail before hydration attaches its error listener.
-    if (node?.complete && node.currentSrc && node.naturalWidth === 0) setFailedSource(source);
+    // An image can fail before hydration attaches its error listener. A failed
+    // responsive image need not retain currentSrc; this component always sets src.
+    if (node?.complete && node.naturalWidth === 0) setFailedSource(source);
   }, [source]);
   const candidates = ([480, 960, 1600] as const).map((width) => ({ url: photoUrl(photo.id, width, preview), width: Math.min(width, photo.width) }));
   const srcSet = candidates.filter((candidate, index) => index === 0 || candidate.width !== candidates[index - 1].width)

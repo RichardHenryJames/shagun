@@ -6,8 +6,8 @@ import { cityPath } from "@/lib/format";
 import { createMetadata, itemListJsonLd } from "@/lib/seo";
 import { BrandMark } from "@/components/public/brand";
 import { CityCard } from "@/components/public/city-card";
+import { CitySearchBox } from "@/components/public/city-search-box";
 import { EmptyState } from "@/components/public/empty-state";
-import { SearchBox } from "@/components/public/search-box";
 import { JsonLd } from "@/components/public/structured-data";
 import { VenueCard } from "@/components/public/venue-card";
 
@@ -29,7 +29,7 @@ export default async function HomePage() {
           <p className="sh-eyebrow"><span className="sh-eyebrow-rule" />WEDDING VENUES, CITY BY CITY</p>
           <h1 id="home-title" className="sh-display">Every celebration<br />begins with<br /><em>a place.</em></h1>
           <p className="sh-hero-intro">A place for your people. A setting for your story. Discover wedding venues with useful details and the freedom to connect directly.</p>
-          <SearchBox action="/cities" id="home-city-search" label="Where are you celebrating?" placeholder="Search your city" buttonLabel="Find my city" />
+          <CitySearchBox id="home-city-search" label="Where are you celebrating?" placeholder="Search your city" buttonLabel="Find my city" />
           {cities.length > 0 ? (
             <div className="sh-city-shortcuts"><span>Explore a city</span>{cities.slice(0, 4).map((city) => <Link key={city.id} href={cityPath(city.slug)}>{city.name}<ArrowUpRight size={13} aria-hidden="true" /></Link>)}</div>
           ) : <p className="sh-hero-launch-note"><span className="sh-status-dot" aria-hidden="true" />Our first city guides are being thoughtfully prepared.</p>}
