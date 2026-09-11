@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
+import ExcelJS from "exceljs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   ADMIN_COOKIE, CITY_PATH, CITY_WORKSPACE, IMAGE_BYTES_LIMIT, INTEGRATION_ORIGIN, MEDIA_BUCKET, SAME_ORIGIN,
   assertDenied, assertFreshInventory, assertImageResponse, assertLoginBudget, assertLoginRejected, assertPreview,
   assertRunConfiguration, assertSignedOut, assertStoredVariants, assertWorkspaceCounts, auditLayout, browserSession, checked,
-  cleanupOwned, editor, field, generatedImages, integrationEnvironment, isolatedContext, loadedImage, localClients, login,
-  newInventory, openFilters, publicSafety, record, runOwnedStorageCleanup, savedId, setCityStatus, setVenueStatus,
+  cleanupOwned, deleteFromUI, editor, field, generatedImages, integrationEnvironment, isolatedContext, loadedImage, localClients, login,
+  newInventory, openFilters, publicSafety, record, runOwnedStorageCleanup, saveExisting, savedId, setCityStatus, setVenueStatus,
   submitEditor, uploadPhoto, visitPublic, type GeneratedImage, type LocalClient, type OwnedInventory,
 } from "./fixtures";
 
@@ -114,8 +115,156 @@ async function exerciseGallery(page: Page, owned: OwnedInventory): Promise<void>
   await expect.poll(() => page.locator("body").evaluate((element) => element.style.overflow)).toBe(overflow);
 }
 
+async function exerciseExcelImport(page: Page, visitor: Page, ordinary: Page, observer: LocalClient, owned: OwnedInventory, width: number) {
+  const count = width === 390 ? 100 : 2;
+  const widths = width === 390 ? [320, 375, 390, 414, 768, 1024, 1440, 1920] : [width];
+  const names = Array.from({ length: count }, (_, index) => `Synthetic Local Excel ${String(index).padStart(3, "0")} ${owned.token}`);
+  const slugs = names.map((name) => name.toLowerCase().replaceAll(" ", "-"));
+  const expected = new Map(slugs.map((slug, index) => [slug, names[index]]));
+  const mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const path = "/api/admin/venue-import";
+  const layout = async () => {
+    for (const viewport of widths) {
+      await page.setViewportSize({ width: viewport, height: viewport >= 768 ? 1000 : 844 });
+      await auditLayout(page);
+    }
+    await page.setViewportSize({ width, height: width >= 768 ? 1000 : 844 });
+  };
+  await page.goto(CITY_WORKSPACE);
+  await page.getByRole("link", { name: "Import Excel", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Import venues from Excel");
+  await expect(page.getByText("Chapra, Bihar, India", { exact: true })).toBeVisible();
+  await layout();
+  const download = page.getByRole("link", { name: "Download template", exact: true });
+  await expect(download).toHaveAttribute("href", `${path}?city_id=${owned.cityId}`);
+  const template = await page.request.get(`${path}?city_id=${owned.cityId}`, API);
+  expect(template.status()).toBe(200);
+  expect(template.headers()["content-type"]).toBe(mimeType);
+  expect(template.headers()["content-disposition"]).toContain("shagun-chapra-venue-template.xlsx");
+  expect(template.headers()["cache-control"]).toMatch(/private.*no-store/);
+  expect(template.headers()["x-robots-tag"]).toContain("noindex");
+  const templateBytes = await template.body();
+  const workbook = async (rows: number, invalid = false) => {
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(Uint8Array.from(templateBytes).buffer);
+    const sheet = book.getWorksheet("Venues")!;
+    const headers = sheet.getRow(1).values as ExcelJS.CellValue[];
+    for (let index = 0; index < rows; index++) {
+      const values: Record<string, ExcelJS.CellValue> = {
+        name: names[index], slug: slugs[index], venue_type: invalid && index === 1 ? "unsupported" : "banquet_hall",
+        description: owned.venueDescription, locality: "Synthetic Local Test Quarter", address: owned.address,
+        phone: "+12025550123", alternate_phone: "+12025550124", whatsapp: "+12025550125", email: "qa@example.invalid",
+        capacity_min: 100, capacity_max: 400, price_min: 10000, price_max: 30000, price_type: "per_event",
+        latitude: 25.78, longitude: 84.73, seo_title: "Synthetic local Excel venue", seo_description: "Local integration only, not real inventory.",
+        source_notes: owned.sourceNotes, ac: "yes", parking: "yes", rooms: "yes", catering: "yes", decoration: "yes",
+        kitchen: "yes", power_backup: "yes", lift: "yes", accessible_entry: "yes",
+      };
+      headers.forEach((header, column) => { if (column) sheet.getRow(index + 2).getCell(column).value = values[String(header)] ?? null; });
+    }
+    return { name: "synthetic-local-venues.xlsx", mimeType, buffer: Buffer.from(await book.xlsx.writeBuffer()) };
+  };
+  const validate = async (file: Awaited<ReturnType<typeof workbook>>, status: number) => {
+    await page.getByLabel("Excel workbook", { exact: true }).setInputFiles(file);
+    await expect(page.getByRole("button", { name: "Validate workbook", exact: true })).toBeEnabled();
+    const failedRequests: string[] = [];
+    const requestFailed = (request: import("@playwright/test").Request) => {
+      if (request.url().includes(path)) failedRequests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    };
+    page.on("requestfailed", requestFailed);
+    const [response] = await Promise.all([
+      page.waitForResponse((value) => new URL(value.url()).pathname === path && value.request().method() === "POST", { timeout: 20_000 }).catch(() => null),
+      page.getByRole("button", { name: "Validate workbook", exact: true }).click(),
+    ]);
+    page.off("requestfailed", requestFailed);
+    if (!response) throw new Error(`Excel validation produced no response (${failedRequests.join(", ") || "no request failure observed"}).`);
+    expect(response.status()).toBe(status);
+    const result = record(await response.json());
+    await expect(page.getByRole("button", { name: "Validate workbook", exact: true })).toBeEnabled();
+    await expect(page.locator(".a-import-feedback")).toBeFocused();
+    return result;
+  };
+  try {
+    const single = await workbook(1);
+    for (const denied of [visitor, ordinary]) {
+      await assertDenied(await denied.request.get(`${path}?city_id=${owned.cityId}`, API));
+      await assertDenied(await denied.request.post(path, { ...API, headers: SAME_ORIGIN, multipart: { city_id: owned.cityId!, mode: "validate", file: single } }));
+    }
+    await validate(await workbook(0), 422);
+    await expect(page.getByRole("region", { name: "Workbook errors", exact: true }).getByRole("cell", { name: "Add at least one venue below the headers.", exact: true })).toBeVisible();
+    await validate(single, 200);
+    await expect(page.getByRole("button", { name: "Import 1 draft", exact: true })).toBeVisible();
+    await layout();
+    await validate(await workbook(2, true), 422);
+    await expect(page.getByRole("button", { name: /^Import \d+ drafts?$/ })).toHaveCount(0);
+    expect(checked(await observer.from("venues").select("id").eq("city_id", owned.cityId!), "Validation-only inventory")).toEqual([]);
+    const batch = await workbook(count);
+    await validate(batch, 200);
+    await expect(page.getByRole("region", { name: "Venue import rows", exact: true }).locator("tbody tr")).toHaveCount(count);
+    await layout();
+    const [response] = await Promise.all([
+      page.waitForResponse((value) => new URL(value.url()).pathname === path && value.request().method() === "POST", { timeout: 60_000 }),
+      page.getByRole("button", { name: `Import ${count} drafts`, exact: true }).click(),
+    ]);
+    expect(response.status()).toBe(200);
+    expect(record(await response.json())).toMatchObject({ phase: "imported", created: count, skipped: 0, remaining: 0 });
+    await expect(page.locator(".a-import-feedback")).toContainText(`${count} drafts confirmed`);
+    await expect(page.getByRole("region", { name: "Venue import rows", exact: true }).getByText("Draft created", { exact: true })).toHaveCount(count);
+    await layout();
+    const venues = checked(await observer.from("venues").select("*").eq("city_id", owned.cityId!), "Observe imported draft batch");
+    expect(venues?.length).toBe(count);
+    expect(venues?.every((venue) => venue.status === "draft" && venue.verification_status === "unverified" && venue.verified_at === null && venue.published_at === null)).toBe(true);
+    const first = venues?.find((venue) => venue.slug === slugs[0]);
+    if (!first) throw new Error("The expected local workbook draft was not saved.");
+    expect(first).toMatchObject({ city_id: owned.cityId, name: names[0], description: owned.venueDescription, locality: "Synthetic Local Test Quarter",
+      address: owned.address, phone: "+12025550123", alternate_phone: "+12025550124", whatsapp: "+12025550125", email: "qa@example.invalid",
+      capacity_min: 100, capacity_max: 400, price_min: 10000, price_max: 30000, price_type: "per_event", latitude: 25.78, longitude: 84.73,
+      seo_title: "Synthetic local Excel venue", seo_description: "Local integration only, not real inventory." });
+    const ids = venues!.map((venue) => venue.id);
+    const research = checked(await observer.from("venue_research").select("venue_id,source_notes,reviewed_at,reviewed_by").in("venue_id", ids), "Observe imported private notes");
+    expect(research?.length).toBe(count);
+    expect(research?.every((entry) => entry.source_notes === owned.sourceNotes && entry.reviewed_at === null && entry.reviewed_by === null)).toBe(true);
+    expect(checked(await observer.from("venue_facilities").select("facility_code").eq("venue_id", first.id), "Observe imported facilities")?.length).toBe(9);
+    expect(checked(await observer.from("cities").select("status").eq("id", owned.cityId!).single(), "Observe unchanged city lifecycle")?.status).toBe("draft");
+    await visitPublic(visitor, `${CITY_PATH}/vivah-bhawan/${first.slug}`, 404, publicSafety(integrationEnvironment(width), owned));
+    await page.getByRole("link", { name: names[0], exact: true }).click();
+    await expect(field(page, "Publication status")).toHaveValue("draft");
+    await expect(field(page, "Verification status")).toHaveValue("unverified");
+    await expect(page.getByRole("checkbox", { name: /^I have reviewed/ })).not.toBeChecked();
+    const editedNotes = `${owned.sourceNotes}\nLocal UI correction after Excel import.`;
+    await field(page, "Private source notes").fill(editedNotes);
+    await saveExisting(page, "venue");
+    const beforeRetry = checked(await observer.from("venues").select("updated_at").eq("id", first.id).single(), "Read exact version before retry");
+    const researchBeforeRetry = checked(await observer.from("venue_research").select("source_notes,updated_at").eq("venue_id", first.id).single(), "Confirm UI correction before retry");
+    expect(researchBeforeRetry?.source_notes.replace(/\r\n/g, "\n") === editedNotes, "The UI correction must be saved before testing an import retry").toBe(true);
+    await page.goto(`${CITY_WORKSPACE}/import`);
+    const retryValidation = await validate(batch, 200);
+    expect(retryValidation).toMatchObject({ remaining: 0, skipped: count });
+    await expect(page.getByRole("button", { name: /^Import \d+ drafts?$/ })).toHaveCount(0);
+    const retry = await page.request.post(path, { ...API, headers: SAME_ORIGIN,
+      multipart: { city_id: owned.cityId!, mode: "import", digest: String(retryValidation.digest), file: batch } });
+    expect(retry.status()).toBe(200);
+    expect(record(await retry.json())).toMatchObject({ phase: "imported", created: 0, skipped: count, remaining: 0 });
+    expect(checked(await observer.from("venues").select("updated_at").eq("id", first.id).single(), "Observe unchanged version after retry")).toEqual(beforeRetry);
+    const researchAfterRetry = checked(await observer.from("venue_research").select("source_notes,updated_at").eq("venue_id", first.id).single(), "Observe preserved UI correction");
+    expect(JSON.stringify(researchAfterRetry) === JSON.stringify(researchBeforeRetry), "Retry must preserve the exact saved note and research timestamp").toBe(true);
+    console.info(`Integration Excel: ${count} drafts; all fields; retry preserves edits; empty/one/many/results layouts at ${widths.join(",")}; no publication.`);
+  } finally {
+    const saved = checked(await observer.from("venues").select("id,city_id,name,slug,status,description").eq("city_id", owned.cityId!).in("slug", slugs), "Inspect exact run-owned workbook drafts for UI cleanup");
+    for (const venue of saved ?? []) {
+      if (venue.city_id !== owned.cityId || venue.name !== expected.get(venue.slug) || venue.description !== owned.venueDescription || venue.status !== "draft") {
+        throw new Error("Workbook draft identity changed; refusing cleanup.");
+      }
+      await page.goto(`/admin/venues/${venue.id}`);
+      await deleteFromUI(page, "venue", venue.id, venue.name);
+    }
+    expect(checked(await observer.from("venues").select("id").eq("city_id", owned.cityId!).in("slug", slugs), "Confirm run-owned workbook draft cleanup")).toEqual([]);
+    await page.setViewportSize({ width, height: width >= 768 ? 1000 : 844 });
+  }
+}
+
 test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", async ({ browser }, info) => {
   const width = assertRunConfiguration(info);
+  test.setTimeout(width === 390 ? 600_000 : 240_000);
   const env = integrationEnvironment(width);
   const owned = newInventory(width);
   const safe = publicSafety(env, owned);
@@ -263,6 +412,10 @@ test("real local admin lifecycle, Auth, city discovery, Storage and cleanup", as
       await expect(page.locator(".sh-city-page")).toHaveCount(1);
       await visitPublic(visitor, CITY_PATH, 404, safe);
       await publicCitySuggestions(visitor, "Chap", false, safe);
+    });
+
+    await test.step("Download Excel, validate rows, import only drafts, preserve retries and clean up through the UI", async () => {
+      await exerciseExcelImport(page, visitor, ordinaryPage, observer, owned, width);
     });
 
     await test.step("Upload a genuine local city cover, preview it privately, and keep the draft image inaccessible", async () => {

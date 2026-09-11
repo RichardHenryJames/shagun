@@ -20,6 +20,7 @@ A city-first wedding venue directory with open discovery and private editorial a
 
 - [supabase/seed.sql](supabase/seed.sql) creates only the draft Hazaribag city, never venues, accounts or photos; conflicts do not overwrite edits. The facility vocabulary comes from the inventory migration.
 - [data/research/hazaribag-2026-09-08.json](data/research/hazaribag-2026-09-08.json) is a separate research batch, not public fallback data. **Add researched drafts** requires active admin authorization, skips existing city/slug records and leaves new entries draft/unverified/unreviewed. Website evidence is not contact verification or photo permission.
+- **Import Excel** in a saved city workspace provides a blank 29-column template, row validation and explicit import of up to **100 new drafts per workbook, 2 MiB maximum**. Existing city/slug records are skipped without changing edits; imported venues remain unverified and unreviewed. Photos and publication stay in the existing editor workflow. See [docs/OPERATIONS.md](docs/OPERATIONS.md#excel-imports-for-a-saved-city).
 - The admin GeoNames catalog has **7,112 places across 36 represented states/territories**. It is a local selection aid, not thousands of saved or launched cities. State-filtered selection is validated server-side and stored as `metadata.geographic_source_id`; deliberate manual entry remains available.
 - Public city selection on home and `/cities` adds at most **8 name/state-labelled suggestions** from active public inventory, including an active empty guide under the existing visibility rule. Native GET search and **24-city pages** still work without JavaScript. Suggestions use only `/api/cities/suggestions`, never Auth, the private catalog or research fallback. Venue discovery retains the existing server `SearchBox`, **12 venues per page**, inventory-derived facets and comparable price bases.
 - Private source notes never enter public descriptions, city metadata, suggestions or photo credits. The suggestion response contains only `name`, `slug` and `state`; its bounds and cancellation contract are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -42,6 +43,7 @@ Shagun uses isolated `shagun` / `shagun_private` namespaces, private `shagun-med
 | Standards/privacy | `/about`, `/privacy` |
 | Private operations | `/admin/login`, `/admin`, `/admin/cities`, `/admin/venues` |
 | City workspace/edit/preview | `/admin/cities/[slug]`, `/admin/cities/[slug]/edit`, `/admin/cities/[slug]/preview` |
+| City-scoped Excel import | `/admin/cities/[slug]/import`; authenticated `GET`/`POST /api/admin/venue-import` |
 | Venue edit/preview | `/admin/venues/[id]`, `/admin/venues/[id]/preview` |
 | Media | Public `/media/[id]/[width]`; private `/api/admin/media` and `/api/admin/media/[id]` |
 | SEO | `/robots.txt`, request-time `/sitemap.xml` index and numbered partitions such as `/sitemap/0.xml` |

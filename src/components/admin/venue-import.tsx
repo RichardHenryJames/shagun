@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useRef, useState, type FormEvent } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, FileCheck2, Upload } from "lucide-react";
@@ -24,6 +24,10 @@ export function VenueImport({ cityId, workspace }: { cityId: string; workspace: 
   const [pending, setPending] = useState<"validate" | "import" | null>(null);
   const request = useRef<AbortController | null>(null);
   const feedback = useRef<HTMLDivElement>(null);
+  const workbookRef = useCallback((node: HTMLInputElement | null) => {
+    const selected = node?.files?.[0];
+    if (selected) setFile(selected);
+  }, []);
 
   useEffect(() => () => { request.current?.abort(); request.current = null; }, []);
   useEffect(() => { if (report || error) feedback.current?.focus(); }, [report, error]);
@@ -80,7 +84,7 @@ export function VenueImport({ cityId, workspace }: { cityId: string; workspace: 
         <div className="a-field">
           <label htmlFor="venue-workbook">Excel workbook</label>
           <input className="a-input" id="venue-workbook" name="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            required disabled={Boolean(pending)} aria-describedby="venue-workbook-limits" aria-invalid={Boolean(error)} onChange={(event) => {
+            ref={workbookRef} required disabled={Boolean(pending)} aria-describedby="venue-workbook-limits" aria-invalid={Boolean(error)} onChange={(event) => {
               setFile(event.target.files?.[0] ?? null); setReport(null); setError("");
             }} />
           <p className="a-field-hint" id="venue-workbook-limits">.xlsx only; 2 MiB maximum; up to {VENUE_IMPORT_MAX_ROWS} venues. Required columns: name, venue_type.</p>

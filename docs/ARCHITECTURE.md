@@ -78,6 +78,18 @@ Migration [../supabase/migrations/0005_city_preview.sql](../supabase/migrations/
 
 Each venue save is atomic; the batch is not. Inspect confirmed partial progress before retry. Current Hazaribag import/review status belongs in [VERIFICATION.md](VERIFICATION.md); human review and image rights are not supplied by source-page dates or readiness flags. Follow [OPERATIONS.md](OPERATIONS.md).
 
+## City-scoped Excel import
+
+The saved workspace links to `/admin/cities/[slug]/import`. [../src/app/api/admin/venue-import/route.ts](../src/app/api/admin/venue-import/route.ts) serves the blank template and handles separate validation/import requests. Configuration is checked before client construction; every request freshly checks managed Auth and the active UUID allowlist, reloads the saved city and applies durable per-admin rate limits. POST also requires same-origin and bounded multipart input. All responses are private/no-store and noindex.
+
+- [../src/lib/venue-import.ts](../src/lib/venue-import.ts) defines the 29-field contract and validates through the existing `venueSchema`. It rejects unknown and lifecycle/identity/photo columns, forces draft/unverified/unreviewed state and a null check date, and binds rows to the server-selected city. Private notes never enter the preview/report projection.
+- [../src/lib/venue-import-workbook.ts](../src/lib/venue-import-workbook.ts) uses server-only ExcelJS with an fflate ZIP preflight. Input is at most **2 MiB**; streaming decompression enforces **8 MiB actual expanded bytes** and **128 entries**, with only bounded plain OOXML parts accepted. Macros, embedded files/images, external workbook parts, unsafe paths, XML entities, formulas, hidden populated cells and unsupported sheets are rejected. Hyperlink display text is read without fetching its target. Only `Venues` and optional `Fields` sheets are accepted, with at most **100 populated rows** and bounded error reporting.
+- Validation completes for the entire workbook before any save. A SHA-256 digest binds the confirmation to the actual file bytes and saved city; it is not an authorization token, and import revalidates both input and authorization. A valid preview alone makes no inventory write.
+- Import looks up matching `(city_id, slug)` records in every lifecycle and skips them. New rows use the existing atomic `save_venue` RPC with null ID/expected version, never direct inserts, updates or upserts. A concurrent uniqueness conflict is a skip. No new migration, city activation, publication or Storage write is involved.
+- The batch is sequential and not atomic: a **35-second loop deadline**, **8-second RPC abort** and route runtime bound prevent unbounded work. Reports distinguish confirmed creation, existing records, uncertain writes and unattempted rows. On a runtime failure, stop, invalidate potentially changed inventory and require inspection before explicit revalidation/retry; never automatically repeat an uncertain write. Existing notes and exact optimistic timestamps remain untouched by retries.
+
+The client has distinct validation errors, explicit draft confirmation and saved-result links, with bounded tables, accessible feedback and request cancellation. It recovers an already selected DOM file when hydration attaches so an early selection is not lost. Workbooks remain in memory, not retained in private Storage. The operator workflow and data-entry rules are in [OPERATIONS.md](OPERATIONS.md#excel-imports-for-a-saved-city); revision-scoped evidence belongs only in [VERIFICATION.md](VERIFICATION.md).
+
 ## Relational model
 
 All inventory tables below belong to `shagun`, not the shared `public` schema.

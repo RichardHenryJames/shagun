@@ -535,7 +535,7 @@ export async function runOwnedStorageCleanup(page: Page, observer: LocalClient, 
   for (const job of jobs) await assertStoredVariants(observer, job.storage_key, false);
 }
 
-async function deleteFromUI(page: Page, kind: "city" | "venue", id: string, name: string): Promise<void> {
+export async function deleteFromUI(page: Page, kind: "city" | "venue", id: string, name: string): Promise<void> {
   await expect(editor(page).locator('input[name="id"]')).toHaveValue(savedId(id));
   await page.locator(`#${kind}-delete > summary`).click();
   const confirmation = field(page, `Type “${name}” to confirm permanent deletion`);
