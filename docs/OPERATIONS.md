@@ -134,6 +134,19 @@ That pre-install artifact is **not** a current Shagun backup or complete managed
 
 Do not restore over production to test recovery, drain reservations blindly after restore or treat an application rollback as recovery of deleted objects. Verify actual plan backup coverage rather than assuming the vendor plan includes everything.
 
+### Current local encrypted SQL backup
+
+[../scripts/db-backup-current.ts](../scripts/db-backup-current.ts) is a separate, explicit Windows operator workflow, not a replacement for the historical public-only helper or a build hook. The **Shagun: Create encrypted local backup** task uses the selected guarded connection and writes a uniquely named encrypted archive and receipt directly in the project root, as requested. The exact current artifact, custodian, timestamps and checks are in [VERIFICATION.md](VERIFICATION.md); both artifact patterns are excluded by [../.gitignore](../.gitignore). Never force-add them, put them in public assets, or upload private SQL contents to diagnostics.
+
+- Reads only current `shagun` / `shagun_private` application rows/ledger and bounded dependency metadata, through verified TLS and a read-only transaction. A shared exported PostgreSQL snapshot binds the native `pg_dump` to the data/metadata comparison. It does not export sibling business rows, Auth users/passwords/sessions, provider secrets or global role passwords.
+- Includes five migration sources/checksums and Shagun bucket/policy metadata. The runner currently **refuses nonempty media, Storage objects or cleanup queues**; it is not a future image-byte backup implementation and must not silently ignore uploaded files.
+- Uses authenticated **AES-256-GCM**, with the random key wrapped by **Windows DPAPI CurrentUser** in [../scripts/backup-key.ps1](../scripts/backup-key.ps1). Keys travel only through child-process pipes. No password/key is requested in chat or stored in plaintext. **The same Windows user profile is required to decrypt.** Copying this archive to another machine is not sufficient: independent key escrow/portable recovery remains an additional controlled procedure.
+- Reopens the saved encrypted file and restores its native archive into a new **network-disabled, read-only-root, tmpfs PostgreSQL container**, with no exposed ports or application stack changes. Owners/ACLs are replayed; all-row fingerprints and named metadata are compared. Two known slug CHECK expressions are reparsed on independent empty scratch tables to prove equal parse/deparse fixed points; predicates, constraint flags, data and every other metadata field must still match.
+- The sandbox creates UUID-only `auth.users` **reference stubs**, plus the source `auth.uid()` SQL definition, solely to satisfy restored SQL dependencies. These are not authenticated users or a substitute for managed Auth, JWT verification, REST or Storage acceptance. No hosted authorization check uses these stubs.
+- `--verify-backup` accepts only an existing root archive and performs decryption/local SQL verification **without connecting to the source database**. Reverify an existing artifact after an interrupted run before taking another capture. An existing receipt is not overwritten. The tool logs only safe counts, hashes, flags and failure stages; no private row bodies or SQL definitions are emitted.
+
+This closes only the scope recorded in the receipt. A root-local, Windows-profile-bound copy is **not off-device protection or complete managed recovery**. Retention, private off-device storage, independent recovery-key custody, managed Auth/settings continuity, actual object bytes and full-service restore acceptance remain distinct responsibilities.
+
 ## 10. Troubleshooting without weakening security
 
 | Symptom | Safe next step |

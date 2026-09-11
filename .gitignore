@@ -18,3 +18,6 @@ supabase/.temp/
 supabase/.branches/
 tests/local-stack/supabase/.temp/
 tests/local-stack/supabase/.branches/
+# Operator-created encrypted local backups and their private receipts.
+/shagun-backup-*.enc
+/shagun-backup-*.manifest.json

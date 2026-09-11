@@ -114,6 +114,24 @@
 			],
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "Shagun: Create encrypted local backup",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"--use-system-ca",
+				"./node_modules/tsx/dist/cli.mjs",
+				"scripts/db-backup-current.ts",
+				"--source-env",
+				"../biharibhojan/.env",
+				"--expected-project-ref",
+				"ixkhyqqovacdramymqjk",
+				"--recovery-owner",
+				"Parimal"
+			],
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

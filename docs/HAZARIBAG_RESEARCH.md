@@ -1,6 +1,6 @@
 # Hazaribag venue research — 2026-09-08
 
-**Current status — 2026-09-09: managed SQL installed; review branch published; research unimported; production promotion blocked.** All **five migrations and the draft Hazaribag seed are installed**; the former catalog snapshot `22023` blocker is resolved. Both API keys are saved in Vercel **Production**, but there is no real admin, venue or photo inventory. **All 12 candidates remain unimported and unreviewed.** Shagun's zero-row API probe returned **406 / PGRST106**; anonymous zero-row `HEAD` probes of shared Order/ContactMessage returned **200**, with SELECT grants and RLS disabled. No customer rows were retrieved. Separate shared-owner remediation and API/admin/editorial gates block promotion. The review branch is published through `9db51bd`; original `2072dc7` hosted audit checks passed. Follow-up code status is canonical in [VERIFICATION.md](VERIFICATION.md); operator gates are in [DEPLOYMENT.md](DEPLOYMENT.md).
+**Operational status:** managed sign-in, import counts, permission repairs, publication and outstanding confirmations are maintained only in [VERIFICATION.md](VERIFICATION.md). This document describes the source-cited batch and its evidence limits, not current database inventory or a live release. Do not repeat provisioning/imports or treat historical HTTP failures as current based on this research document. Operator gates are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Scope and evidence boundary
 
@@ -37,7 +37,7 @@ Only the supplied venue websites, business pages and named directory corroborati
 5. The whole batch is not one transaction. Partial or unconfirmed results require inspection of saved inventory before retrying. No uncertain save is counted as confirmed, and retry is not permission to overwrite existing records. The city lifecycle stays unchanged; no photos, activation, verification or publication is performed.
 6. An editor must open each saved draft, inspect sources/caveats, resolve follow-up, use **Saved preview**, and explicitly review/publish through the existing editor. A verification claim needs a real dated check; photo upload needs actual rights. City activation is a separate action.
 
-**No research import has been performed: all 12 are still prepared catalog records, not database venues.** The separate [../supabase/seed.sql](../supabase/seed.sql) **was applied with all five migrations** and remains draft-city-only, with no venues, photos or accounts. The import feature is implemented, but its managed Auth/editorial execution remains blocked by the release gates.
+**Import execution and saved-record status are recorded in [VERIFICATION.md](VERIFICATION.md).** The separate [../supabase/seed.sql](../supabase/seed.sql) remains draft-city-only, with no venues, photos or accounts. An authenticated research import is a separate operation, not another seed or permission to publish. Inspect saved inventory before retrying; never overwrite operator edits or infer an editorial review from a successful import.
 
 Keep catalog data out of public assets and **public** runtime reads. Only the authorized server-side administration path loads it; public discovery continues to use anonymous database access with active-city/published-venue predicates and **no JSON fallback**. Later cities are created by administrators, not supplied by a hardcoded normal-UI list. After the catalog guard fix, the normal localhost:3000 preview was restored and confirmed honestly empty, without synthetic warnings or inventory. Separate QA fixtures retain their labels and safeguards. See [OPERATIONS.md](OPERATIONS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -157,6 +157,14 @@ No other phone is presumed to support WhatsApp. Sunshine's malformed source link
 
 A later authorized editor must establish rights/provenance and suitable public credit, then use the existing genuine-image decode/re-encode/upload workflow. Source notes and private permission correspondence must not appear in public photo credits or descriptions. Missing authorized photos must not be replaced with unrelated hotel stock images or QA diagrams.
 
+### Photo handoff needed from the rights holder
+
+For each supplied image, provide the exact venue name and file or approved source link, photographer/rights-holder identity, and written permission or an applicable reusable licence covering public Shagun display, hosting and responsive resizing/re-encoding. Include the required public credit and any expiry or usage restrictions. A venue must be authorised to grant the photographer's rights; simply forwarding someone else's image is not sufficient.
+
+Keep a minimal permission reference in private research rather than copying correspondence into public descriptions or photo credits. Verify that the photo actually depicts the named Hazaribag property, is suitable for publication and fits the upload requirements in [OPERATIONS.md](OPERATIONS.md). A publicly accessible gallery, copyright notice, search-engine result or another city's similarly named venue does not supply permission or provenance.
+
+The original dated JSON remains the initial import source, not a live mirror of later editor corrections. Subsequent web-source rechecks, licence-search results and saved corrections are recorded in [VERIFICATION.md](VERIFICATION.md) and the venue's private notes. A repeat import skips existing records and must never overwrite those follow-ups or turn web research into completed editorial approval.
+
 ## Excluded leads — not claims of nonexistence
 
 These names are **not venue records in this batch**. Reasons below are supplied research findings, not network checks performed by this documentation refresh. Exclusion does not establish that a business is closed or nonexistent. Do not guess source URLs, contacts or addresses for these leads.
@@ -181,8 +189,7 @@ These names are **not venue records in this batch**. Reasons below are supplied 
 - [x] Authenticated matching-city import card, server-only action and pure validator/mapper implemented; insert-only per-venue atomic saves, no overwrite, private notes and no automatic review/publication/activation.
 - [x] Draft-city-only seed remains separate; public discovery has no catalog fallback or hardcoded city list.
 - [x] Catalog snapshot `22023` fixed; guarded installation of all five migrations and draft Hazaribag completed with all seven preservation checks passing. Existing policy delegation was used without owner escalation or a forced bypass; preservation is not clearance of the insecure shared baseline.
-- [ ] Separately authorized shared-owner remediation of confirmed anonymous Order/ContactMessage exposure; no customer-row retrieval or unilateral sibling permission changes.
-- [ ] Authorized API configuration and real admin Auth session; **all 12 drafts still need explicit import**.
+- Consult [VERIFICATION.md](VERIFICATION.md) for completed permission/API/administrator/import gates before acting; this research checklist does not require repeating those operations. Shared-owner changes always require their own scoped authorization.
 - [ ] Resolve holds, confirm current contacts/entrances and assess each fact before editorial sign-off.
 - [ ] Obtain photo rights before any real image upload.
 - [ ] Explicit editorial publication and city activation, followed by real-service acceptance, if authorized later.
