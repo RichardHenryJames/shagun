@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ExcelJS from "exceljs";
 import { zipSync, strToU8, unzipSync } from "fflate";
 import { FACILITY_CODES } from "@/lib/types";
-import { VENUE_IMPORT_HEADERS, VENUE_IMPORT_MAX_ROWS, venueImportReportSchema, venueImportRow } from "@/lib/venue-import";
+import { VENUE_IMPORT_BATCH_ROWS, VENUE_IMPORT_HEADERS, VENUE_IMPORT_MAX_ROWS, mergeVenueImportBatch, venueImportReportSchema, venueImportRow } from "@/lib/venue-import";
 import { createVenueWorkbook, parseVenueWorkbook } from "@/lib/venue-import-workbook";
 import { venueSchema } from "@/lib/validation";
 
@@ -21,7 +21,7 @@ describe("spreadsheet draft row contract", () => {
       status: "draft", verification_status: "unverified", verified_at: null, reviewed: false,
       source_notes: "", phone: null, address: null, capacity_min: null, facilities: [],
     });
-    expect(VENUE_IMPORT_MAX_ROWS).toBe(100);
+    expect(VENUE_IMPORT_MAX_ROWS).toBe(1000);
     expect(new Set(VENUE_IMPORT_HEADERS).size).toBe(VENUE_IMPORT_HEADERS.length);
   });
 
@@ -82,6 +82,8 @@ describe("bounded Excel workbook and downloadable template", () => {
     expect(sheet.getRow(1).values).toEqual([undefined, ...VENUE_IMPORT_HEADERS]);
     expect(sheet.getRow(2).getCell(VENUE_IMPORT_HEADERS.indexOf("phone") + 1).numFmt).toBe("@");
     expect(sheet.getRow(2).getCell(VENUE_IMPORT_HEADERS.indexOf("venue_type") + 1).dataValidation.type).toBe("list");
+    expect(sheet.getRow(1001).getCell(VENUE_IMPORT_HEADERS.indexOf("phone") + 1).numFmt).toBe("@");
+    expect(sheet.getRow(1001).getCell(VENUE_IMPORT_HEADERS.indexOf("venue_type") + 1).dataValidation.type).toBe("list");
     expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual(["Venues", "Fields"]);
     expect(await parseVenueWorkbook(bytes, CITY_ID)).toMatchObject({ totalRows: 0, rows: [], issueCount: 1 });
     sheet.getRow(2).getCell(VENUE_IMPORT_HEADERS.indexOf("name") + 1).value = row.name;
@@ -133,10 +135,13 @@ describe("bounded Excel workbook and downloadable template", () => {
     expect(result.rows[0].input.email).toBe("qa@example.invalid");
   });
 
-  it("accepts exactly 100 venues and rejects larger batches", async () => {
-    const rows = Array.from({ length: 100 }, (_, index) => [`Local QA ${index}`, "hotel"]);
-    expect((await parseVenueWorkbook(await workbookBytes(rows), CITY_ID)).rows).toHaveLength(100);
-    await expect(parseVenueWorkbook(await workbookBytes([...rows, ["Extra QA", "hotel"]]), CITY_ID)).rejects.toThrow("at most 100");
+  it("accepts exactly 1000 venues and rejects the 1001st venue", async () => {
+    const rows = Array.from({ length: 1000 }, (_, index) => [`Local QA ${index}`, "hotel"]);
+    const result = await parseVenueWorkbook(await workbookBytes(rows), CITY_ID);
+    expect(result.rows).toHaveLength(1000);
+    expect(result.issues).toEqual([]);
+    expect(result.rows.at(-1)?.row).toBe(1001);
+    await expect(parseVenueWorkbook(await workbookBytes([...rows, ["Extra QA", "hotel"]]), CITY_ID)).rejects.toThrow("at most 1000");
   });
 
   it.each(["hidden rows", "hidden columns", "merged cells", "hidden sheet", "extra sheet", "distant rows"])("rejects %s", async (kind) => {
@@ -327,6 +332,87 @@ describe("authenticated city-scoped workbook endpoint", () => {
     session.state.admin.data = null;
     expect((await POST(importRequest(bytes, "import", validation.digest))).status).toBe(401);
     expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("imports 1000 drafts in ten confirmed requests with bounded duplicate lookups", async () => {
+    const bytes = await workbookBytes(Array.from({ length: 1000 }, (_, index) => [`Local QA ${index}`, "hotel", `qa-${"long-name-".repeat(8)}${index}`]), ["name", "venue_type", "slug"]);
+    let progress = venueImportReportSchema.parse(await (await POST(importRequest(bytes))).json());
+    expect(progress.rows).toHaveLength(1000);
+    expect(session.client.rpc).not.toHaveBeenCalled();
+    expect(session.venueQuery.in).toHaveBeenCalledTimes(20);
+    for (let offset = 0; offset < 1000; offset += VENUE_IMPORT_BATCH_ROWS) {
+      const response = await POST(importRequest(bytes, "import", progress.digest, { offset: String(offset) }));
+      expect(response.status).toBe(200);
+      const batch = venueImportReportSchema.parse(await response.json());
+      expect(batch.rows).toHaveLength(100);
+      expect(batch.created).toBe(100);
+      progress = mergeVenueImportBatch(progress, batch);
+      expect(progress.created).toBe(offset + 100);
+      expect(progress.remaining).toBe(900 - offset);
+      expect(() => mergeVenueImportBatch(progress, batch)).toThrow();
+    }
+    expect(progress).toMatchObject({ phase: "imported", nextOffset: null, created: 1000, skipped: 0, remaining: 0 });
+    expect(progress.rows.every((entry) => entry.outcome === "created")).toBe(true);
+    expect(session.stored.size).toBe(1000);
+    expect(session.client.auth.getUser).toHaveBeenCalledTimes(11);
+    expect(session.venueQuery.in.mock.calls.every((call) => call[1].length <= 50)).toBe(true);
+    expect([...session.stored.values()].every(({ input }) => input.status === "draft" && input.verification_status === "unverified" && input.reviewed === false && input.verified_at === null)).toBe(true);
+  }, 15_000);
+
+  it("rechecks authorization between import batches", async () => {
+    const bytes = await workbookBytes(Array.from({ length: 101 }, (_, index) => [`Local QA ${index}`, "hotel"]));
+    const validation = venueImportReportSchema.parse(await (await POST(importRequest(bytes))).json());
+    const first = venueImportReportSchema.parse(await (await POST(importRequest(bytes, "import", validation.digest))).json());
+    expect(first).toMatchObject({ phase: "importing", created: 100, nextOffset: 100 });
+    session.state.admin.data = null;
+    expect((await POST(importRequest(bytes, "import", validation.digest, { offset: "100" }))).status).toBe(401);
+    expect(session.stored.size).toBe(100);
+  });
+
+  it("preserves confirmed earlier batches when a later save fails", async () => {
+    const bytes = await workbookBytes(Array.from({ length: 103 }, (_, index) => [`Local QA ${index}`, "hotel"]));
+    const validation = venueImportReportSchema.parse(await (await POST(importRequest(bytes))).json());
+    const first = venueImportReportSchema.parse(await (await POST(importRequest(bytes, "import", validation.digest))).json());
+    const progress = mergeVenueImportBatch(validation, first);
+    session.state.saves = [null, { data: null, error: { code: "", message: PRIVATE_DETAIL } }];
+    const response = await POST(importRequest(bytes, "import", validation.digest, { offset: "100" }));
+    expect(response.status).toBe(503);
+    const result = mergeVenueImportBatch(progress, venueImportReportSchema.parse(await response.json()));
+    expect(result).toMatchObject({ phase: "stopped", nextOffset: null, created: 101, remaining: 2 });
+    expect(result.rows.slice(100).map((entry) => entry.outcome)).toEqual(["created", "unconfirmed", "not_attempted"]);
+    expect(session.stored.size).toBe(101);
+    expect(() => mergeVenueImportBatch(result, first)).toThrow();
+  });
+
+  it.each(["", "1", "-100", "100.0", "1e2", "1000", "10000", "NaN", "100"])("rejects invalid or out-of-range offset %s", async (offset) => {
+    const bytes = await workbookBytes([[row.name, row.venue_type]]);
+    const validation = await (await POST(importRequest(bytes))).json();
+    expect((await POST(importRequest(bytes, "import", validation.digest, { offset }))).status).toBe(400);
+    expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects a validation offset and validates the last row before any first-batch save", async () => {
+    const rows = Array.from({ length: 1000 }, (_, index) => [`Local QA ${index}`, index === 999 ? "invalid" : "hotel"]);
+    const bytes = await workbookBytes(rows);
+    expect((await POST(importRequest(bytes, "validate", undefined, { offset: "0" }))).status).toBe(400);
+    const validation = await (await POST(importRequest(bytes))).json();
+    expect(validation).toMatchObject({ phase: "invalid", totalRows: 1000 });
+    expect((await POST(importRequest(bytes, "import", validation.digest))).status).toBe(422);
+    expect(session.client.rpc).not.toHaveBeenCalled();
+    expect(session.venueQuery.select).not.toHaveBeenCalled();
+  });
+
+  it.each(["city", "digest", "offset", "rows", "next offset", "row identity"])("rejects mismatched batch %s", async (kind) => {
+    const bytes = await workbookBytes([[row.name, row.venue_type]]);
+    const validation = venueImportReportSchema.parse(await (await POST(importRequest(bytes))).json());
+    const batch = venueImportReportSchema.parse(await (await POST(importRequest(bytes, "import", validation.digest))).json());
+    if (kind === "city") batch.cityId = OTHER_CITY_ID;
+    if (kind === "digest") batch.digest = "a".repeat(64);
+    if (kind === "offset") batch.offset = 100;
+    if (kind === "rows") batch.rows = [];
+    if (kind === "next offset") batch.nextOffset = 100;
+    if (kind === "row identity") batch.rows[0].slug = "different-qa";
+    expect(() => mergeVenueImportBatch(validation, batch)).toThrow();
   });
 
   it("rejects modified files, changed city, missing confirmation and extra form fields without writes", async () => {

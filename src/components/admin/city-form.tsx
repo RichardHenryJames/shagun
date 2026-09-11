@@ -2,14 +2,33 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { Eye, Save } from "lucide-react";
-import { saveCityAction } from "@/lib/actions/cities";
+import { Eye, Plus, Save } from "lucide-react";
+import { createCatalogCityAction, saveCityAction } from "@/lib/actions/cities";
 import type { GeoCity } from "@/lib/city-catalog-data";
 import { slugify } from "@/lib/format";
 import { CITY_STATUSES, type ActionState, type CitySummary } from "@/lib/types";
 import { CityPicker } from "@/components/admin/city-picker";
 import { FieldErrors, FormFeedback, InputField, SelectField, TextareaField } from "@/components/admin/form-fields";
 import { SectionNav } from "@/components/admin/ui";
+
+export function CreateCityForm() {
+  const [state, action, pending] = useActionState<ActionState, FormData>(createCatalogCityAction, {});
+  const [selection, setSelection] = useState<GeoCity | null>(null);
+  return (
+    <form action={action} className="a-editor-form a-city-create" aria-busy={pending} onSubmit={(event) => {
+      if (!selection || pending) event.preventDefault();
+    }}>
+      <input type="hidden" name="catalog_id" value={selection?.id ?? ""} />
+      <FormFeedback state={state} fieldIds={{ catalog_id: "city-catalog-query" }} />
+      <CityPicker simple value={selection} onChange={setSelection} errors={state.fieldErrors?.catalog_id} disabled={pending} />
+      <div className="a-actions">
+        <button className="a-button a-button--primary" type="submit" disabled={pending || !selection}><Plus size={16} aria-hidden="true" />{pending ? "Creating city..." : "Create city"}</button>
+        <Link className="a-button a-button--quiet" href="/admin/cities" prefetch={false}>Cancel</Link>
+        <span className="a-badge a-badge--neutral">Draft</span>
+      </div>
+    </form>
+  );
+}
 
 export function CityForm({ city, catalogCity = null }: { city?: CitySummary; catalogCity?: GeoCity | null }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(saveCityAction, {});

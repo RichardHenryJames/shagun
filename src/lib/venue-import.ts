@@ -3,7 +3,8 @@ import { slugify } from "@/lib/format";
 import { FACILITY_CODES, FACILITY_LABELS } from "@/lib/types";
 import { venueSchema } from "@/lib/validation";
 
-export const VENUE_IMPORT_MAX_ROWS = 100;
+export const VENUE_IMPORT_MAX_ROWS = 1000;
+export const VENUE_IMPORT_BATCH_ROWS = 100;
 export const VENUE_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
 export const VENUE_IMPORT_MAX_ISSUES = 100;
 export const VENUE_IMPORT_SHEET = "Venues";
@@ -38,20 +39,45 @@ export type VenueImportInput = z.output<typeof venueSchema>;
 export interface VenueImportIssue { row: number; column: string; message: string }
 
 export const venueImportReportSchema = z.object({
-  phase: z.enum(["invalid", "validated", "imported", "stopped"]),
+  phase: z.enum(["invalid", "validated", "importing", "imported", "stopped"]),
   cityId: z.uuid(), digest: z.string().regex(/^[a-f0-9]{64}$/),
+  offset: z.number().int().min(0).max(VENUE_IMPORT_MAX_ROWS - 1).default(0),
+  nextOffset: z.number().int().min(1).max(VENUE_IMPORT_MAX_ROWS - 1).nullable().default(null),
   totalRows: z.number().int().min(0).max(VENUE_IMPORT_MAX_ROWS),
   created: z.number().int().min(0).max(VENUE_IMPORT_MAX_ROWS),
   skipped: z.number().int().min(0).max(VENUE_IMPORT_MAX_ROWS),
   remaining: z.number().int().min(0).max(VENUE_IMPORT_MAX_ROWS),
   rows: z.array(z.object({
-    row: z.number().int().min(2).max(1001), name: z.string().max(180), slug: z.string().max(90),
+    row: z.number().int().min(2).max(VENUE_IMPORT_MAX_ROWS + 1), name: z.string().max(180), slug: z.string().max(90),
     outcome: z.enum(["ready", "existing", "created", "unconfirmed", "not_attempted"]), id: z.uuid().optional(),
   })).max(VENUE_IMPORT_MAX_ROWS),
-  issues: z.array(z.object({ row: z.number().int().min(1).max(1001), column: z.string().max(100), message: z.string().max(1000) })).max(VENUE_IMPORT_MAX_ISSUES),
+  issues: z.array(z.object({ row: z.number().int().min(1).max(VENUE_IMPORT_MAX_ROWS + 1), column: z.string().max(100), message: z.string().max(1000) })).max(VENUE_IMPORT_MAX_ISSUES),
   issueCount: z.number().int().min(0), error: z.string().max(1000).optional(),
 });
 export type VenueImportReport = z.infer<typeof venueImportReportSchema>;
+
+export function mergeVenueImportBatch(previous: VenueImportReport, batch: VenueImportReport): VenueImportReport {
+  const offset = previous.phase === "validated" ? 0 : previous.nextOffset;
+  const end = Math.min((offset ?? 0) + VENUE_IMPORT_BATCH_ROWS, previous.totalRows);
+  if (offset === null || !["validated", "importing"].includes(previous.phase)
+    || !["importing", "imported", "stopped"].includes(batch.phase)
+    || batch.cityId !== previous.cityId || batch.digest !== previous.digest || batch.totalRows !== previous.totalRows
+    || batch.offset !== offset || batch.rows.length !== end - offset || previous.rows.length !== previous.totalRows
+    || batch.nextOffset !== (batch.phase === "importing" ? end : null)
+    || (batch.phase === "importing" && end >= previous.totalRows) || (batch.phase === "imported" && end !== previous.totalRows)
+    || batch.rows.some((entry, index) => {
+      const expected = previous.rows[offset + index];
+      return entry.row !== expected.row || entry.name !== expected.name || entry.slug !== expected.slug || entry.outcome === "ready"
+        || (batch.phase !== "stopped" && !["created", "existing"].includes(entry.outcome));
+    })) throw new Error("The import progress could not be confirmed.");
+  const rows = previous.rows.map((entry, index) => {
+    const result = index >= offset && index < end ? batch.rows[index - offset] : entry;
+    return batch.phase === "stopped" && result.outcome === "ready" ? { ...result, outcome: "not_attempted" as const } : result;
+  });
+  const created = rows.filter((entry) => entry.outcome === "created").length;
+  const skipped = rows.filter((entry) => entry.outcome === "existing").length;
+  return { ...batch, rows, created, skipped, remaining: previous.totalRows - created - skipped };
+}
 
 export function venueImportRow(fields: Record<string, unknown>, cityId: string): VenueImportInput {
   const issues: z.core.$ZodIssue[] = [];

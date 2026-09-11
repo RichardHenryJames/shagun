@@ -17,7 +17,8 @@ vi.mock("@/lib/media", () => { throw new Error("Actions must use lightweight buc
 // The parent configuration supplies the @/ alias and empty server-only module.
 // Security's real HMAC/durable limiter is exercised against a mocked service RPC.
 import { loginAction, logoutAction } from "@/lib/actions/auth";
-import { deleteCityAction, saveCityAction } from "@/lib/actions/cities";
+import { createCatalogCityAction, deleteCityAction, saveCityAction } from "@/lib/actions/cities";
+import { getCatalogCity, getCatalogStates, searchCityCatalog } from "@/lib/city-catalog";
 import { cleanupStorageAction } from "@/lib/actions/maintenance";
 import { actionError } from "@/lib/actions/shared";
 import { deleteVenueAction, saveVenueAction } from "@/lib/actions/venues";
@@ -45,10 +46,10 @@ type StatefulAction = (previous: ActionState, formData: FormData) => Promise<Act
 function query(result: QueryResult) {
   const pending = Promise.resolve(result);
   const builder = {
-    select: vi.fn(), eq: vi.fn(), lte: vi.fn(), order: vi.fn(), limit: vi.fn(), delete: vi.fn(),
+    select: vi.fn(), eq: vi.fn(), lte: vi.fn(), order: vi.fn(), limit: vi.fn(), delete: vi.fn(), contains: vi.fn(), in: vi.fn(), abortSignal: vi.fn(),
     maybeSingle: vi.fn().mockResolvedValue(result), then: pending.then.bind(pending),
   };
-  for (const name of ["select", "eq", "lte", "order", "limit", "delete"] as const) builder[name].mockReturnValue(builder);
+  for (const name of ["select", "eq", "lte", "order", "limit", "delete", "contains", "in", "abortSignal"] as const) builder[name].mockReturnValue(builder);
   return builder;
 }
 
@@ -119,6 +120,7 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 const adminActions: Array<[string, StatefulAction]> = [
+  ["create catalog city", createCatalogCityAction],
   ["save city", saveCityAction], ["delete city", deleteCityAction],
   ["save venue", saveVenueAction], ["delete venue", deleteVenueAction],
   ["cleanup", cleanupStorageAction], ["logout", logoutAction],
@@ -157,6 +159,113 @@ describe("fresh action authorization", () => {
     expect(session.client.auth.getUser).toHaveBeenCalledTimes(2);
     expect(session.adminQuery.maybeSingle).toHaveBeenCalledTimes(2);
     expect(session.client.rpc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("selection-only city creation", () => {
+  function savedCities(source: QueryResult = { data: null, error: null }, matches: QueryResult = { data: [], error: null }) {
+    const associated = query(source);
+    const occupied = query(matches);
+    let reads = 0;
+    session.client.from.mockImplementation((table) => {
+      if (table === "admin_users") return session.adminQuery;
+      if (table === "cities") return reads++ === 0 ? associated : occupied;
+      throw new Error("Unexpected city creation query");
+    });
+    return { associated, occupied };
+  }
+
+  it.each(getCatalogStates())("derives geography and draft defaults in $name from only the selected ID", async (state) => {
+    const source = searchCityCatalog(state.name, state.code, 1)[0];
+    expect(source).toBeDefined();
+    savedCities();
+    await expect(createCatalogCityAction({}, form({ catalog_id: source.id }))).rejects.toBe(mocks.redirectSignal);
+    expect(session.client.rpc).toHaveBeenCalledExactlyOnceWith("save_city", {
+      p_id: null, p_expected: null, p_data: { name: source.name, slug: source.suggestedSlug, state: state.name, country: "India",
+        status: "draft", description: null, seo_title: null, seo_description: null, metadata: { geographic_source_id: source.id } },
+    });
+    expect(mocks.redirect).toHaveBeenCalledWith(`/admin/cities/${source.suggestedSlug}`);
+  });
+
+  it("ignores posted geography, lifecycle, SEO and edit identifiers", async () => {
+    const source = searchCityCatalog("Chapra", undefined, 1)[0];
+    savedCities();
+    await expect(createCatalogCityAction({}, form({ catalog_id: source.id, id: CITY_ID, expected_updated_at: VERSION,
+      name: "Injected", state: "Wrong state", country: "Not India", slug: "injected", status: "active", seo_title: "Injected", metadata: '{"secret":"private"}' }))).rejects.toBe(mocks.redirectSignal);
+    expect(session.client.rpc).toHaveBeenCalledWith("save_city", { p_id: null, p_expected: null, p_data: expect.objectContaining({
+      name: "Chapra", state: "Bihar", country: "India", slug: "chapra", status: "draft", seo_title: null, metadata: { geographic_source_id: source.id },
+    }) });
+  });
+
+  it.each(["", "invalid", "geonames:999999999999999"])("rejects missing or unknown selection %s", async (catalog_id) => {
+    expect((await createCatalogCityAction({}, form({ catalog_id }))).fieldErrors?.catalog_id).toBeDefined();
+    expect(session.client.rpc).not.toHaveBeenCalled();
+    expect(session.client.from).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects duplicate selected IDs", async () => {
+    const data = form({ catalog_id: "geonames:1274746" });
+    data.append("catalog_id", "geonames:1270396");
+    expect((await createCatalogCityAction({}, data)).fieldErrors?.catalog_id).toBeDefined();
+    expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("opens the existing associated workspace without overwriting it", async () => {
+    const source = searchCityCatalog("Chapra", undefined, 1)[0];
+    savedCities({ data: { id: CITY_ID, slug: "saved-editorial-slug" }, error: null });
+    await expect(createCatalogCityAction({}, form({ catalog_id: source.id }))).rejects.toBe(mocks.redirectSignal);
+    expect(mocks.redirect).toHaveBeenCalledWith("/admin/cities/saved-editorial-slug");
+    expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("recognizes an unassociated seeded city through its real source alias", async () => {
+    const source = searchCityCatalog("Hazaribag", undefined, 1)[0];
+    expect(getCatalogCity(source.id)?.aliases).toContain("Hazaribag");
+    savedCities(undefined, { data: [{ ...CITY, name: "Hazaribag", slug: "hazaribag" }], error: null });
+    await expect(createCatalogCityAction({}, form({ catalog_id: source.id }))).rejects.toBe(mocks.redirectSignal);
+    expect(mocks.redirect).toHaveBeenCalledWith("/admin/cities/hazaribag");
+    expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("chooses an available generated slug without overwriting another source, second collision %s", async (secondCollision) => {
+    const source = searchCityCatalog("Chapra", undefined, 1)[0];
+    const matches = [{ ...CITY, name: "Chapra", slug: "chapra", state: "Bihar", metadata: { geographic_source_id: "geonames:999999" } }];
+    if (secondCollision) matches.push({ ...matches[0], slug: "chapra-bihar" });
+    savedCities(undefined, { data: matches, error: null });
+    await expect(createCatalogCityAction({}, form({ catalog_id: source.id }))).rejects.toBe(mocks.redirectSignal);
+    expect(session.client.rpc).toHaveBeenCalledWith("save_city", expect.objectContaining({ p_id: null,
+      p_data: expect.objectContaining({ slug: secondCollision ? `chapra-${source.id.slice(9)}` : "chapra-bihar" }),
+    }));
+  });
+
+  it("fails closed on saved-city lookup errors", async () => {
+    savedCities({ data: null, error: { message: PRIVATE_DETAIL } });
+    const result = await createCatalogCityAction({}, form({ catalog_id: searchCityCatalog("Chapra", undefined, 1)[0].id }));
+    expect(result.error).toBeDefined();
+    expect(JSON.stringify(result)).not.toContain(PRIVATE_DETAIL);
+    expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("does not reuse a manual workspace when two source places share its name and state", async () => {
+    const matches = searchCityCatalog("Rampur", undefined, 25);
+    const source = matches.find((city) => matches.some((other) => other.id !== city.id && other.name === city.name && other.state === city.state));
+    expect(source).toBeDefined();
+    savedCities(undefined, { data: [{ ...CITY, name: source!.name, state: source!.state, slug: source!.suggestedSlug }], error: null });
+    await expect(createCatalogCityAction({}, form({ catalog_id: source!.id }))).rejects.toBe(mocks.redirectSignal);
+    expect(session.client.rpc).toHaveBeenCalledOnce();
+    const payload = session.client.rpc.mock.calls[0][1].p_data;
+    expect(payload.slug).not.toBe(source!.suggestedSlug);
+    expect(payload.metadata).toEqual({ geographic_source_id: source!.id });
+  });
+
+  it("attaches concurrent slug conflicts to the visible city selection, not a hidden slug field", async () => {
+    savedCities();
+    session.client.rpc.mockResolvedValue({ data: null, error: { code: "23505", message: PRIVATE_DETAIL } });
+    const result = await createCatalogCityAction({}, form({ catalog_id: searchCityCatalog("Chapra", undefined, 1)[0].id }));
+    expect(result.fieldErrors?.catalog_id).toBeDefined();
+    expect(result.fieldErrors?.slug).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain(PRIVATE_DETAIL);
+    expect(session.client.rpc).toHaveBeenCalledOnce();
   });
 });
 

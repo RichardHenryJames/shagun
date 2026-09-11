@@ -10,7 +10,7 @@ import {
 
 const MAX_EXPANDED_BYTES = 8 * 1024 * 1024;
 const MAX_ENTRIES = 128;
-const MAX_SHEET_ROWS = 1001;
+const MAX_SHEET_ROWS = VENUE_IMPORT_MAX_ROWS + 1;
 const allowedPart = /^(?:\[Content_Types\]\.xml|_rels\/\.rels|docProps\/(?:app|core|custom)\.xml|xl\/(?:workbook\.xml|styles\.xml|sharedStrings\.xml|_rels\/workbook\.xml\.rels|theme\/theme\d+\.xml|worksheets\/sheet\d+\.xml|worksheets\/_rels\/sheet\d+\.xml\.rels|tables\/table\d+\.xml))$/;
 
 export class VenueImportFileError extends Error {}
@@ -42,7 +42,7 @@ function boundedWorkbook(bytes: Uint8Array): ArrayBuffer {
       file.ondata = (error, data, final) => {
         if (error) throw error;
         expandedBytes += data.byteLength;
-        if (expandedBytes > MAX_EXPANDED_BYTES) throw new VenueImportFileError("The expanded workbook is too large. Use the blank template and at most 100 venues.");
+        if (expandedBytes > MAX_EXPANDED_BYTES) throw new VenueImportFileError(`The expanded workbook is too large. Use the blank template and at most ${VENUE_IMPORT_MAX_ROWS} venues.`);
         chunks.push(data);
         if (final) {
           completed++;
@@ -87,7 +87,10 @@ export async function parseVenueWorkbook(bytes: Uint8Array, cityId: string): Pro
     || workbook.worksheets.some((worksheet) => ![VENUE_IMPORT_SHEET, "Fields"].includes(worksheet.name))) {
     throw new VenueImportFileError('Use one visible "Venues" sheet and, optionally, the template\'s "Fields" sheet.');
   }
-  if (sheet.hasMerges || sheet.rowCount > MAX_SHEET_ROWS || sheet.columnCount > VENUE_IMPORT_HEADERS.length) {
+  if (sheet.rowCount > MAX_SHEET_ROWS) {
+    throw new VenueImportFileError(`Import at most ${VENUE_IMPORT_MAX_ROWS} venues per workbook. Remove rows below Excel row ${MAX_SHEET_ROWS} or split the file.`);
+  }
+  if (sheet.hasMerges || sheet.columnCount > VENUE_IMPORT_HEADERS.length) {
     throw new VenueImportFileError("Remove merged cells, extra columns and distant rows. Use the current template.");
   }
   const issues: VenueImportIssue[] = [];
@@ -142,7 +145,7 @@ export async function parseVenueWorkbook(bytes: Uint8Array, cityId: string): Pro
     }
   });
   if (!totalRows) issues.push({ row: 2, column: "name", message: "Add at least one venue below the headers." });
-  if (totalRows > VENUE_IMPORT_MAX_ROWS) throw new VenueImportFileError("Import at most 100 venues per workbook. Split larger inventories into separate files.");
+  if (totalRows > VENUE_IMPORT_MAX_ROWS) throw new VenueImportFileError(`Import at most ${VENUE_IMPORT_MAX_ROWS} venues per workbook. Split larger inventories into separate files.`);
   return { rows, totalRows, issues: issues.slice(0, VENUE_IMPORT_MAX_ISSUES), issueCount: issues.length };
 }
 
@@ -176,7 +179,7 @@ export async function createVenueWorkbook(): Promise<Uint8Array> {
   fields.addRow(["City", "Selected in admin", "Create and save the city first, then import from its workspace. No city field is read from Excel."]);
   fields.addRow(["Publication", "Separate UI review", "Every import creates unreviewed, unverified drafts. Existing venues are skipped, never overwritten. Review and publish in the venue editor."]);
   fields.addRow(["Photographs", "Separate image upload", "After saving, upload genuine images with permission, alternative text and a rights credit in each venue editor. Images and remote photo URLs are not imported."]);
-  fields.addRow(["File limits", "100 venues / 2 MiB", "Only the Venues sheet supplies rows. Use values, not formulas, merged/hidden cells, macros or embedded files. Leave unknown facts blank."]);
+  fields.addRow(["File limits", `${VENUE_IMPORT_MAX_ROWS} venues / 2 MiB`, "Only the Venues sheet supplies rows. Use values, not formulas, merged/hidden cells, macros or embedded files. Leave unknown facts blank."]);
   fields.getRow(1).font = { bold: true };
   fields.eachRow((row) => { row.alignment = { wrapText: true, vertical: "top" }; row.height = 48; });
   return new Uint8Array(await workbook.xlsx.writeBuffer());

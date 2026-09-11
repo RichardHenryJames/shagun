@@ -3,8 +3,8 @@
 import { startTransition, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, FileCheck2, Upload } from "lucide-react";
-import { VENUE_IMPORT_MAX_BYTES, VENUE_IMPORT_MAX_ROWS, venueImportReportSchema, type VenueImportReport } from "@/lib/venue-import";
+import { Check, FileCheck2, Square, Upload } from "lucide-react";
+import { VENUE_IMPORT_BATCH_ROWS, VENUE_IMPORT_MAX_BYTES, VENUE_IMPORT_MAX_ROWS, mergeVenueImportBatch, venueImportReportSchema, type VenueImportReport } from "@/lib/venue-import";
 
 const OUTCOME_LABELS = {
   ready: "Ready for draft", existing: "Existing; skipped", created: "Draft created", unconfirmed: "Save unconfirmed", not_attempted: "Not saved",
@@ -30,7 +30,7 @@ export function VenueImport({ cityId, workspace }: { cityId: string; workspace: 
   }, []);
 
   useEffect(() => () => { request.current?.abort(); request.current = null; }, []);
-  useEffect(() => { if (report || error) feedback.current?.focus(); }, [report, error]);
+  useEffect(() => { if (!pending && (report || error)) feedback.current?.focus(); }, [pending, report, error]);
 
   async function submit(mode: "validate" | "import") {
     if (request.current) return;
@@ -45,31 +45,45 @@ export function VenueImport({ cityId, workspace }: { cityId: string; workspace: 
     setError("");
     if (mode === "validate") setReport(null);
     let failure = "";
+    let progress = report;
+    let offset = 0;
     try {
-      const body = new FormData();
-      body.set("file", file);
-      body.set("city_id", cityId);
-      body.set("mode", mode);
-      if (mode === "import" && report) body.set("digest", report.digest);
-      const response = await fetch("/api/admin/venue-import", { method: "POST", body, credentials: "same-origin", cache: "no-store", redirect: "error",
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(75_000)]) });
-      const data: unknown = await response.json().catch(() => null);
-      if (request.current !== controller) return;
-      const result = venueImportReportSchema.safeParse(data);
-      if (!result.success || result.data.cityId !== cityId) {
-        if (data && typeof data === "object" && "error" in data && typeof data.error === "string") failure = data.error.slice(0, 1000);
-        throw new Error("unconfirmed_response");
-      }
-      setReport(result.data);
-      if (mode === "import") startTransition(() => router.refresh());
+      do {
+        controller.signal.throwIfAborted();
+        const body = new FormData();
+        body.set("file", file);
+        body.set("city_id", cityId);
+        body.set("mode", mode);
+        if (mode === "import" && progress) { body.set("digest", progress.digest); body.set("offset", String(offset)); }
+        const response = await fetch("/api/admin/venue-import", { method: "POST", body, credentials: "same-origin", cache: "no-store", redirect: "error",
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(75_000)]) });
+        const data: unknown = await response.json().catch(() => null);
+        if (request.current !== controller) return;
+        const result = venueImportReportSchema.safeParse(data);
+        if (!result.success || result.data.cityId !== cityId) {
+          if (data && typeof data === "object" && "error" in data && typeof data.error === "string") failure = data.error.slice(0, 1000);
+          throw new Error("unconfirmed_response");
+        }
+        if (!response.ok && !["invalid", "stopped"].includes(result.data.phase)) throw new Error("unconfirmed_response");
+        progress = mode === "import" && progress ? mergeVenueImportBatch(progress, result.data) : result.data;
+        setReport(progress);
+        if (mode !== "import" || progress.phase !== "importing") break;
+        offset = progress.nextOffset!;
+      } while (offset < VENUE_IMPORT_MAX_ROWS);
     } catch {
       if (request.current !== controller) return;
-      setReport(null);
+      setReport(mode === "import" && progress ? { ...progress, phase: "stopped", nextOffset: null,
+        rows: progress.rows.map((entry, index) => entry.outcome === "ready"
+          ? { ...entry, outcome: index >= offset && index < offset + VENUE_IMPORT_BATCH_ROWS ? "unconfirmed" : "not_attempted" } : entry),
+      } : null);
       setError(mode === "import"
-        ? `${failure || "The import response could not be confirmed."} Check saved city inventory before retrying; some drafts may have been saved. Validate the file again to skip existing venues.`
+        ? `${failure || (controller.signal.aborted ? "The import was stopped." : "The import response could not be confirmed.")} Check saved city inventory before retrying; some drafts may have been saved. Validate the file again to skip existing venues.`
         : failure || "The workbook could not be validated. Check your connection and administrator session, then try again.");
     } finally {
-      if (request.current === controller) { request.current = null; setPending(null); }
+      if (request.current === controller) {
+        request.current = null; setPending(null);
+        if (mode === "import") startTransition(() => router.refresh());
+      }
     }
   }
 
@@ -97,7 +111,11 @@ export function VenueImport({ cityId, workspace }: { cityId: string; workspace: 
         </div>
       </form>
       <div ref={feedback} tabIndex={-1} className="a-import-feedback" aria-live="polite" aria-atomic="true">
-        {pending && <p role="status">{pending === "validate" ? "Checking workbook rows and existing venues..." : "Importing drafts. Waiting for confirmed results..."}</p>}
+        {pending && <p role="status">{pending === "validate" ? "Checking workbook rows and existing venues..." : `Importing drafts: ${report?.created ?? 0} confirmed; ${report?.nextOffset ?? 0} of ${report?.totalRows ?? 0} rows processed.`}</p>}
+        {pending === "import" && <div className="a-actions">
+          <progress aria-label="Venue import progress" max={report?.totalRows ?? 1} value={report?.nextOffset ?? 0} />
+          <button type="button" className="a-button a-button--quiet" onClick={() => request.current?.abort()}><Square size={16} aria-hidden="true" />Stop import</button>
+        </div>}
         {error && <div className="a-feedback" role="alert"><p>{error}</p><Link href={workspace} prefetch={false} className="a-link">View saved city inventory</Link></div>}
         {report && !pending && <div className={`a-feedback${report.phase === "invalid" || report.phase === "stopped" ? "" : " a-feedback--success"}`} role={report.phase === "invalid" || report.phase === "stopped" ? "alert" : "status"}>
           <p>{summary(report)}</p>{report.error && <p>{report.error}</p>}

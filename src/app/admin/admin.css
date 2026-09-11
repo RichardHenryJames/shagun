@@ -148,6 +148,9 @@
 .a-city-entry-mode legend { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
 .a-city-entry-mode input { accent-color: var(--a-primary); }
 .a-city-picker { min-width: 0; padding: 1rem; margin-block: 0 1.25rem; border: 1px solid var(--a-line); border-radius: 5px; background: #f7f9fc; }
+.a-city-create { max-width: 42rem; }
+.a-city-picker--simple { position: relative; padding: 0; border: 0; background: transparent; }
+.a-city-picker--simple .a-city-attribution { margin-block: 1rem; }
 .a-city-picker-status { margin-block: 0.75rem; }
 .a-city-attribution { margin-top: 0.75rem; }
 .a-city-options { list-style: none; margin: 0; padding: 0.25rem; max-height: 19rem; overflow-y: auto; overscroll-behavior-y: contain; border: 1px solid #aeb9c8; border-radius: 4px; background: #fff; }

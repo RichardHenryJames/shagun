@@ -17,12 +17,14 @@ Administration uses neutral surfaces, compact tables, clear lifecycle labels, se
 - Distinguish loading, no matches and request failure; provide retry without disabling the underlying **native GET/no-JavaScript path**. A draft-only database still correctly shows preparation/empty states.
 - The existing server `SearchBox` for **venue search is unchanged**. Public autocomplete does not use Auth, and carrying an admin cookie cannot widen its inventory. Server validation, anonymous RPC bounds and no-store behavior are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Admin selection:** the state/union-territory filter and searchable GeoNames combobox help create a city workspace. The checked-in catalog contains **7,112 places across 36 represented states/territories**, not 7,112 Shagun city records. Search returns bounded suggestions with name, state, district and stable source ID; selection fills geographic fields but saves or activates nothing.
+**Admin selection:** Add City has one nationwide city combobox, a selected name/state/district summary and **Create city**. There are no mandatory state/country, slug, introduction, SEO, lifecycle or metadata inputs on this screen. The checked-in catalog contains **7,112 places across 36 represented states/territories**, not 7,112 Shagun city records. Search returns bounded name/state/district-labelled suggestions; stable source IDs remain internal in this compact view. Changing a selection searches all India again, never retaining a hidden state filter.
 
-- Require explicit result selection or deliberate **manual entry**. Repeated names must remain distinguishable.
+- Require explicit result selection and a separate create command. The server derives geography, India, an available slug and draft defaults; standard SEO remains automatic without fabricated content. Repeated names stay distinguishable by state and district. Existing city editors retain optional editorial controls, state-filtered association and manual records.
 - Support arrows, Enter, Escape, visible focus, loading/errors/retry and stale-request cancellation. The combobox displays at most 12 results; narrowing is preferable to an enormous dropdown.
 - Preserve GeoNames/CC BY 4.0 attribution. The server validates the selected ID and stores `metadata.geographic_source_id`; it is not an editable provenance field.
 - Catalog availability, saved city lifecycle and venue publication are separate concepts. Existing editorial spellings and locked URLs are not renamed by catalog selection.
+
+**Excel import:** a workbook supports up to 1,000 rows, within the existing byte limits. One confirmation starts bounded 100-row requests with cumulative progress and **Stop import**. Keep confirmed, skipped, unconfirmed and unattempted outcomes distinct. Stopping does not undo a server request already received; errors require inventory inspection and explicit revalidation, never blind automatic retry. Large preview/result tables scroll inside their own bounded container rather than widening the page.
 
 Missing Supabase URL/public-key configuration now returns a sanitized **503** from the catalog API before client construction, private/no-store and noindex, without catalog data. Do not confuse this unavailable state with no search matches or bypass configured fresh Auth/allowlist checks.
 

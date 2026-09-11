@@ -137,6 +137,12 @@ describe("complete checked-in geography and observed source records", () => {
     }
   });
 
+  it.each(getCatalogStates())("finds $name places without requiring a state filter", (state) => {
+    const source = snapshot.cities.find((city) => city.stateCode === state.code)!;
+    const choices = searchCityCatalog(`${source.name} ${state.name}`);
+    expect(choices.some((city) => city.id === source.id && city.state === state.name && city.country === "India")).toBe(true);
+  });
+
   it("keeps Hazaribagh's ASCII default and genuine Hazaribag aliases, without a name exception", () => {
     expect(getCatalogCity(HAZARIBAGH)).toMatchObject({
       id: HAZARIBAGH, name: "Hazaribagh", state: "Jharkhand", stateCode: "IN.38", country: "India", countryCode: "IN",

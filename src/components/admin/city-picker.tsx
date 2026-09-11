@@ -23,20 +23,20 @@ async function fetchCatalog(parameters: URLSearchParams, signal: AbortSignal): P
     credentials: "same-origin", cache: "no-store", signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
   });
   if (response.status === 401 || response.status === 403) throw new Error("Sign in again to search the city catalog.");
-  if (!response.ok) throw new Error("The city catalog is temporarily unavailable. Try again or use manual entry.");
+  if (!response.ok) throw new Error("City search is temporarily unavailable. Try again.");
   return responseSchema.parse(await response.json());
 }
 
 function catalogError(error: unknown): string {
   return error instanceof Error && error.message === "Sign in again to search the city catalog."
-    ? error.message : "The city catalog is temporarily unavailable. Try again or use manual entry.";
+    ? error.message : "City search is temporarily unavailable. Try again.";
 }
 
-export function CityPicker({ value, onChange, errors, disabled = false }: {
-  value: GeoCity | null; onChange: (city: GeoCity | null) => void; errors?: string[]; disabled?: boolean;
+export function CityPicker({ value, onChange, errors, disabled = false, simple = false }: {
+  value: GeoCity | null; onChange: (city: GeoCity | null) => void; errors?: string[]; disabled?: boolean; simple?: boolean;
 }) {
   const [query, setQuery] = useState(value?.name ?? "");
-  const [stateCode, setStateCode] = useState(value?.stateCode ?? "");
+  const [stateCode, setStateCode] = useState(simple ? "" : value?.stateCode ?? "");
   const [catalog, setCatalog] = useState<Pick<CatalogResponse, "states" | "source"> | null>(null);
   const [optionsError, setOptionsError] = useState("");
   const [optionsRetry, setOptionsRetry] = useState(0);
@@ -59,12 +59,13 @@ export function CityPicker({ value, onChange, errors, disabled = false }: {
   const active = expanded && activeIndex >= 0 && activeIndex < items.length ? activeIndex : -1;
 
   useEffect(() => {
+    if (simple) return;
     const controller = new AbortController();
     void fetchCatalog(new URLSearchParams({ limit: String(RESULT_LIMIT) }), controller.signal).then((response) => {
       if (!controller.signal.aborted) { setCatalog({ states: response.states, source: response.source }); setOptionsError(""); }
     }).catch((error: unknown) => { if (!controller.signal.aborted) setOptionsError(catalogError(error)); });
     return () => controller.abort();
-  }, [optionsRetry]);
+  }, [optionsRetry, simple]);
 
   useEffect(() => {
     if (value || disabled || searchQuery.length < 2) return;
@@ -104,7 +105,7 @@ export function CityPicker({ value, onChange, errors, disabled = false }: {
     activeRequest.current?.abort();
     onChange(city);
     setQuery(city.name);
-    setStateCode(city.stateCode);
+    setStateCode(simple ? "" : city.stateCode);
     setOpen(false);
     setActiveIndex(-1);
     setResults(null);
@@ -131,16 +132,16 @@ export function CityPicker({ value, onChange, errors, disabled = false }: {
   const message = value ? `Selected ${value.name}, ${value.state}, ${value.country}.`
     : current?.error ? current.error
       : searching ? "Searching the city catalog…"
-        : searchQuery.length < 2 ? "Type at least 2 characters, then choose a result. Arrow keys move between results; Enter selects; Escape closes."
-          : current && current.total === 0 ? "No catalog cities match. Change the state or search, or use manual entry."
+        : searchQuery.length < 2 ? simple ? "" : "Type at least 2 characters, then choose a result. Arrow keys move between results; Enter selects; Escape closes."
+          : current && current.total === 0 ? simple ? "No matching cities." : "No catalog cities match. Change the state or search, or use manual entry."
             : current ? `${current.total} matching places. Showing ${current.items.length}${current.total > current.items.length ? "; type more to narrow the results" : ""}.` : "";
 
   return (
-    <div className="a-city-picker" ref={root} onBlur={(event) => {
+    <div className={`a-city-picker${simple ? " a-city-picker--simple" : ""}`} ref={root} onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); setActiveIndex(-1); }
     }}>
       <div className="a-form-grid">
-        <div className="a-field">
+        {!simple && <div className="a-field">
           <label htmlFor="city-catalog-state">Filter by state / union territory</label>
           <select className="a-input" id="city-catalog-state" value={stateCode} disabled={disabled || !catalog} aria-describedby="city-catalog-state-hint" onChange={(event) => {
             activeRequest.current?.abort();
@@ -156,13 +157,14 @@ export function CityPicker({ value, onChange, errors, disabled = false }: {
           </select>
           <p className="a-field-hint" id="city-catalog-state-hint">{catalog ? `${catalog.states.length} source-listed states and union territories. This filter does not change the saved city's state.` : optionsError || "Loading state options…"}</p>
           {!catalog && optionsError && <button className="a-button" type="button" disabled={disabled} onClick={() => { setOptionsError(""); setOptionsRetry((retry) => retry + 1); }}>Retry state options</button>}
-        </div>
-        <div className="a-field a-city-combobox">
-          <label htmlFor={id}>Search the city catalog</label>
+        </div>}
+        <div className={`a-field a-city-combobox${simple ? " a-span-full" : ""}`}>
+          <label htmlFor={id}>{simple ? "City" : "Search the city catalog"}</label>
           <input ref={input} id={id} className="a-input" type="text" role="combobox" autoComplete="off" spellCheck={false} maxLength={MAX_CATALOG_QUERY}
+            placeholder={simple ? "Search cities in India" : undefined}
             value={query} disabled={disabled} aria-autocomplete="list" aria-expanded={expanded} aria-controls={listId}
             aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined} aria-invalid={errors?.length ? true : undefined}
-            aria-describedby={`${id}-hint ${id}-status${errors?.length ? ` ${id}-error` : ""}`} aria-busy={searching}
+            aria-describedby={`${simple ? "" : `${id}-hint `}${id}-status${errors?.length ? ` ${id}-error` : ""}`} aria-busy={searching}
             onFocus={() => setOpen(true)} onKeyDown={keyDown} onChange={(event) => {
               activeRequest.current?.abort();
               setQuery(event.target.value.replace(/\p{Cc}/gu, "").slice(0, MAX_CATALOG_QUERY));
@@ -174,21 +176,21 @@ export function CityPicker({ value, onChange, errors, disabled = false }: {
               setOpen(true);
               onChange(null);
             }} />
-          <p id={`${id}-hint`} className="a-field-hint">Search names, source aliases or districts. Check the state and district before selecting; names can repeat.</p>
+          {!simple && <p id={`${id}-hint`} className="a-field-hint">Search names, source aliases or districts. Check the state and district before selecting; names can repeat.</p>}
           <ul ref={list} id={listId} className="a-city-options" role="listbox" aria-label="Matching catalog cities" hidden={!expanded}>
             {items.map((city, index) => <li key={city.id} id={`${listId}-${index}`} role="option" aria-selected={active === index} tabIndex={-1}
               onPointerDown={(event) => event.preventDefault()} onClick={() => choose(city)}
               onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(city); } }}>
-              <strong>{city.name}</strong><span>{city.state}, {city.country}{city.district ? ` · District: ${city.district}` : " · District not recorded"}</span><small>{city.id}</small>
+              <strong>{city.name}</strong><span>{city.state}, {city.country}{city.district ? ` · District: ${city.district}` : " · District not recorded"}</span>{!simple && <small>{city.id}</small>}
             </li>)}
           </ul>
           <FieldErrors id={id} errors={errors} />
         </div>
       </div>
-      <p className="a-field-hint a-city-picker-status" id={`${id}-status`} role="status" aria-live="polite" aria-atomic="true">{message}</p>
+      <p className={`a-field-hint a-city-picker-status${simple && value ? " a-sr-only" : ""}`} id={`${id}-status`} role="status" aria-live="polite" aria-atomic="true">{message}</p>
       {current?.error && !value && <button className="a-button" type="button" disabled={disabled} onClick={() => { setResults(null); setOpen(true); setSearchRevision((revision) => revision + 1); }}>Retry city search</button>}
-      {value && <p className="a-inline-value">Geographic source: <strong>{value.name}</strong> · {value.state}, {value.country}{value.district ? ` · District: ${value.district}` : ""}<br /><span className="a-field-hint">{value.id} · Edit the display name and available URL below. The source association becomes fixed after saving.</span></p>}
-      <p className="a-field-hint a-city-attribution">Geographical data © <a className="a-link" href={catalog?.source.url ?? "https://www.geonames.org/"} target="_blank" rel="noopener noreferrer">GeoNames<span className="a-sr-only"> (opens in a new tab)</span></a>, licensed under <a className="a-link" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0<span className="a-sr-only"> (opens in a new tab)</span></a>. Source-derived names and aliases; not launched Shagun inventory or a completeness claim.</p>
+      {value && <p className="a-inline-value">{!simple && "Geographic source: "}<strong>{value.name}</strong> · {value.state}, {value.country}{value.district ? ` · District: ${value.district}` : ""}{!simple && <><br /><span className="a-field-hint">{value.id} · Edit the display name and available URL below. The source association becomes fixed after saving.</span></>}</p>}
+      <p className="a-field-hint a-city-attribution">Geographical data © <a className="a-link" href={catalog?.source.url ?? "https://www.geonames.org/"} target="_blank" rel="noopener noreferrer">GeoNames<span className="a-sr-only"> (opens in a new tab)</span></a>, licensed under <a className="a-link" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0<span className="a-sr-only"> (opens in a new tab)</span></a>{!simple && ". Source-derived names and aliases; not launched Shagun inventory or a completeness claim."}</p>
     </div>
   );
 }

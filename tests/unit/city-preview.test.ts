@@ -410,6 +410,13 @@ describe("shared public/preview rendering and catalog UI contracts", () => {
     expect(html).toContain('id="city-catalog-state"'); expect(html).toContain('role="combobox"'); expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('aria-controls="city-catalog-query-results"'); expect(html).toContain('role="listbox"');
     expect(html).toContain("GeoNames"); expect(html).toContain("CC BY 4.0"); expect(html).not.toContain(CHAPRA);
+    const simple = renderToStaticMarkup(createElement(CityPicker, { value: null, onChange: vi.fn(), simple: true }));
+    expect(simple).toContain('placeholder="Search cities in India"');
+    expect(simple).toContain('role="combobox"');
+    expect(simple).not.toContain('id="city-catalog-state"');
+    expect(simple).not.toContain("manual entry");
+    expect(simple).not.toContain("Arrow keys");
+    expect(simple).toContain("GeoNames"); expect(simple).toContain("CC BY 4.0");
     const form = renderToStaticMarkup(createElement(CityForm));
     expect(form).toContain("Choose from catalog"); expect(form).toContain("Enter a city manually");
     expect(form).toContain("Select a catalog result before saving");
