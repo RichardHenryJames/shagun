@@ -5,27 +5,30 @@ import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { parse } from "dotenv";
 import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, expectTypeOf, it, vi } from "vitest";
+import type { Database } from "../../src/lib/db/database.types";
 import {
-  MIGRATION_FILES, SHARED_TABLES, STORAGE_POLICIES, SafeError, assertPreserved, assertStorageState,
-  buildMigrations, connectionOptions, connectionTarget, exposedSchemas, migrationPlan, parseArguments,
+  LEDGER_READ_LIMIT, MIGRATION_FILES, SHARED_TABLES, STORAGE_POLICIES, SafeError, assertPreserved, assertStorageState,
+  buildMigrations, connectionOptions, connectionTarget, exposedSchemas, functionContracts, migrationPlan, parseArguments,
   readMigrationSources, safeTarget, sanitizedFailure, sha256, sqlStatements, validateMigrationSource, validateSeed,
   type CliOptions, type LedgerRow, type Migration, type MigrationFile, type NamespaceState,
   type PreservationSnapshot, type SafeErrorCode,
 } from "../../scripts/db-migration-plan";
 
 // This suite never imports the executable runner or opens a socket. The only
-// real file reads are the four checked-in SQL sources, seed and planner source.
+// real file reads are the five checked-in SQL sources, seed, planner and runner sources.
 // URLs/passwords below are synthetic parser inputs, NOT ambient credentials.
 vi.mock("postgres", () => { throw new Error("Database clients are forbidden in planner unit tests."); });
 const directory = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url));
 let sources: { filename: MigrationFile; sql: string }[];
 let seed: string;
 let plannerSource: string;
+let runnerSource: string;
 beforeAll(async () => {
   sources = await Promise.all(MIGRATION_FILES.map(async (filename) => ({ filename, sql: await readFile(resolve(directory, filename), "utf8") })));
   seed = await readFile(new URL("../../supabase/seed.sql", import.meta.url), "utf8");
   plannerSource = await readFile(new URL("../../scripts/db-migration-plan.ts", import.meta.url), "utf8");
+  runnerSource = await readFile(new URL("../../scripts/db-migrate.ts", import.meta.url), "utf8");
 });
 
 function source(filename: MigrationFile) {
@@ -107,11 +110,12 @@ describe("checked-in migration source review", () => {
     expect(validateMigrationSource("0001_inventory.sql", `GRANT /* benign */ USAGE ON SCHEMA shagun_private TO ${role};`)).toHaveLength(1);
   });
 
-  it("builds the four migrations in order without changing their exact UTF-8 checksums", async () => {
+  it("builds the five migrations in order without changing their exact UTF-8 checksums", async () => {
     const original = sources.map((entry) => ({ ...entry }));
     const migrations = buildMigrations([...sources].reverse());
+    expect(MIGRATION_FILES).toEqual(["0001_inventory.sql", "0002_storage.sql", "0003_sitemap.sql", "0004_media_uploads.sql", "0005_city_preview.sql"]);
     expect(migrations.map(({ filename }) => filename)).toEqual(MIGRATION_FILES);
-    expect(migrations.map(({ version }) => version)).toEqual(["0001", "0002", "0003", "0004"]);
+    expect(migrations.map(({ version }) => version)).toEqual(["0001", "0002", "0003", "0004", "0005"]);
     expect(migrations.map(({ checksum }) => checksum)).toEqual(sources.map(({ sql }) => createHash("sha256").update(sql, "utf8").digest("hex")));
     expect(sources).toEqual(original);
     expect(await readMigrationSources(directory)).toEqual(migrations);
@@ -131,13 +135,88 @@ describe("checked-in migration source review", () => {
   });
 
   it("refuses missing, duplicate, extra or renamed filenames before examining SQL", () => {
-    for (const entries of [sources.slice(1), [...sources, sources[0]],
-      [...sources.slice(0, 3), sources[0]], [...sources, { filename: "0005_extra.sql", sql: "select 1;" }],
+    for (const entries of [sources.slice(1), sources.slice(0, 4), [...sources, sources[0]],
+      [...sources.slice(0, 4), sources[0]], [...sources, { filename: "0006_extra.sql", sql: "select 1;" }],
       sources.map((entry, index) => index ? entry : { ...entry, filename: "0001_renamed.sql" })]) {
       expectCode(() => buildMigrations(entries), "SQL_FILES");
     }
     expectCode(() => validateMigrationSource("unreviewed.sql" as MigrationFile, "create schema shagun;"), "SQL_FILES");
     expectCode(() => validateMigrationSource("0001_inventory.sql", source("0003_sitemap.sql")), "SQL_REVIEW");
+  });
+});
+
+describe("narrow city-preview migration contracts", () => {
+  function previewFunction(name: string) {
+    const statement = sqlStatements(source("0005_city_preview.sql")).find((entry) => entry.text.startsWith(`create function ${name}(`));
+    if (!statement) throw new Error("Missing checked-in preview function.");
+    return statement;
+  }
+
+  it("requires a nonnullable city in the typed preview API and shares every other search argument", () => {
+    type Functions = Database["shagun"]["Functions"];
+    type PreviewArgs = Functions["preview_city_venues"]["Args"];
+    expectTypeOf<Pick<PreviewArgs, "p_city">>().toEqualTypeOf<{ p_city: string }>();
+    expectTypeOf<Omit<PreviewArgs, "p_city">>().toEqualTypeOf<Omit<Functions["search_venues"]["Args"], "p_city">>();
+    expectTypeOf<Functions["preview_city_facets"]["Args"]>().toEqualTypeOf<{ p_city: string }>();
+    expectTypeOf<Functions["preview_city_venues"]["Returns"]>().toEqualTypeOf<Functions["search_venues"]["Returns"]>();
+    expectTypeOf<Functions["preview_city_facets"]["Returns"]>().toEqualTypeOf<Functions["city_facets"]["Returns"]>();
+  });
+
+  it.each(["shagun.preview_city_venues", "shagun.preview_city_facets", "shagun_private.city_preview_inventory"])(
+    "pins %s to invoker rights, an empty path and an active-admin check before validation", (name) => {
+      const statement = previewFunction(name);
+      expect(statement.text).toContain("language plpgsql stable security invoker set search_path = ''");
+      expect(statement.bodies[0]).toMatch(/\bbegin\s+perform shagun_private\.require_admin\(\);\s+if p_city is null then/);
+      expect(statement.bodies[0]).toContain("errcode = '22023', message = 'city_required'");
+      for (const [before, after] of [
+        ["security invoker", "security definer"], ["search_path = ''", "search_path = 'public'"],
+        ["p_city uuid", "p_city uuid default null"], ["language plpgsql", "language sql"],
+        ["create function", "create or replace function"], [name, `${name}_extra`],
+      ]) expectCode(() => validateMigrationSource("0005_city_preview.sql", replaceOnce(statement.text, before, after)), "SQL_REVIEW");
+      expectCode(() => validateMigrationSource("0001_inventory.sql", statement.text), "SQL_REVIEW");
+    },
+  );
+
+  it("pins preview defaults and return types without replacing a public RPC", () => {
+    const sql = previewFunction("shagun.preview_city_venues").text;
+    for (const [before, after] of [
+      ["p_limit integer default 12", "p_limit integer default 25"], ["p_sort text default 'recent'", "p_sort text default 'name'"],
+      ["p_facilities text[] default '{}'", "p_facilities text[] default null"], ["returns jsonb", "returns text"],
+    ]) expectCode(() => validateMigrationSource("0005_city_preview.sql", replaceOnce(sql, before, after)), "SQL_REVIEW");
+    expectCode(() => validateMigrationSource("0005_city_preview.sql", replaceOnce(previewFunction("shagun_private.city_preview_inventory").text,
+      "returns setof shagun.venues", "returns setof shagun.cities")), "SQL_REVIEW");
+    expectCode(() => validateMigrationSource("0005_city_preview.sql", inventoryFunction("shagun.search_venues")), "SQL_REVIEW");
+    expectCode(() => validateMigrationSource("0005_city_preview.sql", inventoryFunction("shagun.city_facets")), "SQL_REVIEW");
+  });
+
+  it.each(["shagun.preview_city_venues", "shagun.preview_city_facets"])(
+    "allows only the exact city-scoped helper read inside %s, not a private-function wildcard", (name) => {
+      const sql = previewFunction(name).text;
+      const read = "from shagun_private.city_preview_inventory(p_city)";
+      for (const replacement of [
+        "from shagun_private.city_preview_inventory_extra(p_city)", "from shagun_private.city_preview_inventory(null)",
+        "from shagun_private.city_preview_inventory(p_city, p_city)", "from shagun_private.needs_review(p_city)",
+        "from shagun_private.schema_migrations", "from shagun_private.city_preview_inventory",
+        "from public.city_preview_inventory(p_city)", "from storage.objects", "from auth.users",
+      ]) expectCode(() => validateMigrationSource("0005_city_preview.sql", replaceOnce(sql, read, replacement)), "SQL_REVIEW");
+      const legacy = replaceOnce(inventoryFunction("shagun.admin_venues"), "from shagun.venues v", `${read} v`);
+      expectCode(() => validateMigrationSource("0001_inventory.sql", legacy), "SQL_REVIEW");
+    },
+  );
+
+  it("pins all three EXECUTE revokes/grants without adding any schema, table or managed privileges", () => {
+    const sql = source("0005_city_preview.sql");
+    expect(sqlStatements(sql)).toHaveLength(5); // Three functions and two exact ACL statements.
+    for (const role of ["public", "anon", "service_role"]) {
+      expectCode(() => validateMigrationSource("0005_city_preview.sql", replaceOnce(sql,
+        "to authenticated;", `to authenticated, ${role};`)), "SQL_REVIEW");
+    }
+    expectCode(() => validateMigrationSource("0005_city_preview.sql", replaceOnce(sql,
+      "from public, anon, authenticated, service_role", "from public, anon, authenticated")), "SQL_REVIEW");
+    for (const extra of [
+      "grant execute on all functions in schema shagun_private to authenticated;",
+      "grant usage on schema shagun to authenticated;", "grant select on shagun.venue_research to anon;",
+    ]) expectCode(() => validateMigrationSource("0005_city_preview.sql", `${sql}\n${extra}`), "SQL_REVIEW");
   });
 });
 
@@ -420,14 +499,48 @@ describe("namespace, ledger and preservation fail-closed behavior", () => {
     expectCode(() => migrationPlan(migrations, state, []), "NAMESPACE_STATE");
   });
 
-  it.each([1, 2, 3, 4])("accepts exactly an ordered checksum-matching prefix of length %s", (length) => {
+  it.each([1, 2, 3, 4, 5])("accepts exactly an ordered checksum-matching prefix of length %s", (length) => {
     expect(migrationPlan(migrations, installed, ledger.slice(0, length)))
       .toEqual({ firstInstall: false, applied: migrations.slice(0, length), pending: migrations.slice(length) });
   });
 
+  it("upgrades an exact 0001-0004 ledger by applying only 0005 without rewriting old checksums", () => {
+    const checkedIn = buildMigrations(sources);
+    const oldLedger = checkedIn.slice(0, 4).map(({ version, checksum }) => ({ version, checksum }));
+    const before = structuredClone(oldLedger);
+    const plan = migrationPlan(checkedIn, installed, oldLedger);
+    expect(plan).toEqual({ firstInstall: false, applied: checkedIn.slice(0, 4), pending: [checkedIn[4]] });
+    expect(plan.pending[0]).toMatchObject({ filename: "0005_city_preview.sql", version: "0005" });
+    expect(oldLedger).toEqual(before);
+    expect(plan.applied.map(({ checksum }) => checksum)).toEqual(sources.slice(0, 4).map(({ sql }) => sha256(sql)));
+  });
+
+  it.each([[0, 0, 0], [1, 14, 14], [2, 14, 14], [3, 15, 14], [4, 17, 14], [5, 19, 15]])(
+    "expects only recorded functions at prefix length %i (%i RPCs / %i helpers)", (length, publicCount, privateCount) => {
+      const contracts = functionContracts(ledger.slice(0, length).map(({ version }) => version));
+      expect(contracts.rpcs).toHaveLength(publicCount);
+      expect(Object.keys(contracts.privateGrants)).toHaveLength(privateCount);
+      expect(contracts.rpcs.filter(({ name }) => name.startsWith("preview_city_"))).toEqual(length === 5 ? [
+        { name: "preview_city_venues", args: "uuid, text, integer, numeric, text, text[], text, text, integer, integer", roles: ["authenticated"], definer: false },
+        { name: "preview_city_facets", args: "uuid", roles: ["authenticated"], definer: false },
+      ] : []);
+      expect(contracts.privateGrants.city_preview_inventory).toEqual(length === 5 ? ["authenticated"] : undefined);
+    },
+  );
+
+  it("uses the same versioned contracts in the runner and reads a sixth ledger row to detect unknown history", () => {
+    expect(runnerSource).toContain("functionContracts(versions)");
+    expect(LEDGER_READ_LIMIT).toBe(6);
+    expect(LEDGER_READ_LIMIT).toBeGreaterThan(MIGRATION_FILES.length);
+    expect(runnerSource).toMatch(/select version, checksum from shagun_private\.schema_migrations order by version collate "C" limit \$\{LEDGER_READ_LIMIT\}/);
+    const extra = [...ledger, { version: "0006", checksum: sha256("synthetic-unknown-migration") }];
+    expectCode(() => migrationPlan(migrations, installed, extra.slice(0, LEDGER_READ_LIMIT)), "LEDGER_PREFIX");
+    expectCode(() => migrationPlan(migrations, installed, [...ledger.slice(0, 4), extra[5]]), "LEDGER_PREFIX");
+  });
+
   it("rejects empty, gapped, duplicate, reordered, unknown or unrecorded ledgers", () => {
     for (const rows of [[], ledger.slice(1), [ledger[0], ledger[2]], [ledger[0], ledger[0]], [...ledger].reverse(),
-      [{ ...ledger[0], version: "9999" }], [...ledger, ledger[0]]]) {
+      [{ ...ledger[0], version: "9999" }], [...ledger, { version: "0006", checksum: sha256("unknown") }], [...ledger, ledger[0]]]) {
       expectCode(() => migrationPlan(migrations, installed, rows), "LEDGER_PREFIX");
     }
     expectCode(() => migrationPlan(migrations, fresh, ledger), "LEDGER_PREFIX");
@@ -503,7 +616,7 @@ describe("planner import and explicit file I/O boundaries", () => {
     expect(filesystem.readdir).not.toHaveBeenCalled();
   });
 
-  it("reads only the exact four SQL paths on explicit request", async () => {
+  it("reads only the exact five SQL paths on explicit request", async () => {
     const { planner, filesystem, forbidden } = isolatedPlanner();
     filesystem.readdir.mockResolvedValue(sources.map(({ filename }) => ({ name: filename, isFile: () => true })));
     filesystem.readFile.mockImplementation(async (path: string) => {
@@ -523,6 +636,8 @@ describe("planner import and explicit file I/O boundaries", () => {
     for (const entries of [
       [{ name: "other.sql", isFile: () => true }],
       MIGRATION_FILES.map((name, index) => ({ name, isFile: () => index !== 0 })),
+      [...MIGRATION_FILES, "0006_unknown.sql"].map((name) => ({ name, isFile: () => true })),
+      [...MIGRATION_FILES.slice(0, 4), "0005_city_preview_extra.sql"].map((name) => ({ name, isFile: () => true })),
     ]) {
       filesystem.readdir.mockResolvedValue(entries);
       await expect(planner.readMigrationSources(directory)).rejects.toMatchObject({ code: "SQL_FILES" });

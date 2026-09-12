@@ -1,46 +1,67 @@
-# Shagun — interface system and screen plan
+# Shagun — interface design
+
+**As of 2026-09-09:** home and the city directory have progressive public-city autocomplete, separate from private geographic selection. Current test/publication evidence and preview state are in [VERIFICATION.md](VERIFICATION.md). Production promotion remains blocked by the shared-security and operator/editorial gates in [AUDIT.md](AUDIT.md). Review publication, previews and test inventory are not a public launch.
 
 ## Visual direction
 
-Public: warm paper (#faf7f2), ink/plum (#432c3d), muted green (#54675a), clay accents, fine rules, editorial serif headings and a highly readable sans-serif. Restrained 8px spacing rhythm; modest 6–12px radii; no fake stars, testimonial faces, counters, awards, garish gradients or dashboard styling. Decorative arch/celebration artwork is not a venue photo.
+Public pages use warm paper (#faf7f2), ink/plum (#432c3d), muted green (#54675a), clay accents, fine rules, editorial serif headings and readable sans-serif text. Keep restrained spacing and modest radii. Decorative arches and missing-photo illustrations must not resemble claims of real venue photography. No invented stars, reviews, awards, popularity or coverage metrics.
 
-Admin: neutral surfaces, compact tables and clear status chips; keyboard-first labeled inputs, section anchors and a sticky save/preview action bar. Same accessibility baseline, separate visual hierarchy.
+Administration uses neutral surfaces, compact tables, clear lifecycle labels, section navigation and a sticky save/preview bar. It is a productivity interface, not the public visual hierarchy.
+
+## Public autocomplete and private city selection
+
+**Public discovery:** home and `/cities` progressively enhance the existing native GET form with a labelled combobox/listbox. Full results retain **24 cities per page** and actual published-venue counts; the suggestion response contains only `name`, `slug` and `state`.
+
+- Show at most **8 name/state-labelled options** from `/api/cities/suggestions`. Match existing active-city visibility, including an active guide whose venues later become empty. Never show catalog places as launched guides or use private GeoNames/research fallback.
+- Support arrow navigation, Enter selection, pointer/touch selection, Escape dismissal and clear focus. Debounce **250 ms**, time out after **8 seconds**, abort stale requests and invalidate pending work on edits, including trailing edits, blur and unmount. Late responses must not reopen a dismissed list.
+- Distinguish loading, no matches and request failure; provide retry without disabling the underlying **native GET/no-JavaScript path**. A draft-only database still correctly shows preparation/empty states.
+- The existing server `SearchBox` for **venue search is unchanged**. Public autocomplete does not use Auth, and carrying an admin cookie cannot widen its inventory. Server validation, anonymous RPC bounds and no-store behavior are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+**Admin selection:** Add City has one nationwide city combobox, a selected name/state/district summary and **Create city**. There are no mandatory state/country, slug, introduction, SEO, lifecycle or metadata inputs on this screen. The checked-in catalog contains **7,112 places across 36 represented states/territories**, not 7,112 Shagun city records. Search returns bounded name/state/district-labelled suggestions; stable source IDs remain internal in this compact view. Changing a selection searches all India again, never retaining a hidden state filter.
+
+- Require explicit result selection and a separate create command. The server derives geography, India, an available slug and draft defaults; standard SEO remains automatic without fabricated content. Repeated names stay distinguishable by state and district. Existing city editors retain optional editorial controls, state-filtered association and manual records.
+- Support arrows, Enter, Escape, visible focus, loading/errors/retry and stale-request cancellation. The combobox displays at most 12 results; narrowing is preferable to an enormous dropdown.
+- Preserve GeoNames/CC BY 4.0 attribution. The server validates the selected ID and stores `metadata.geographic_source_id`; it is not an editable provenance field.
+- Catalog availability, saved city lifecycle and venue publication are separate concepts. Existing editorial spellings and locked URLs are not renamed by catalog selection.
+
+**Excel import:** a workbook supports up to 1,000 rows, within the existing byte limits. One confirmation starts bounded 100-row requests with cumulative progress and **Stop import**. Keep confirmed, skipped, unconfirmed and unattempted outcomes distinct. Stopping does not undo a server request already received; errors require inventory inspection and explicit revalidation, never blind automatic retry. Large preview/result tables scroll inside their own bounded container rather than widening the page.
+
+Missing Supabase URL/public-key configuration now returns a sanitized **503** from the catalog API before client construction, private/no-store and noindex, without catalog data. Do not confuse this unavailable state with no search matches or bypass configured fresh Auth/allowlist checks.
+
+Sources: [../src/components/admin/city-picker.tsx](../src/components/admin/city-picker.tsx), [../src/components/admin/city-form.tsx](../src/components/admin/city-form.tsx), [../data/geography/README.md](../data/geography/README.md).
 
 ## Public screens
 
-- Home: confident wedding-focused headline, city discovery search, active-city links, real recently published inventory only, a three-step explanation, transparent listing standards and a quiet footer. If no city is active, show an intentional launch preparation state, not imaginary recommendations.
-- Cities: searchable database-driven city directory with state and actual published count; no invented popularity. No results → reset/search guidance.
-- City: breadcrumbs, heading/short editable intro/count, inline name/locality search, desktop sidebar and accessible mobile bottom sheet, chips, coherent price basis, sort, 12-card grid, numbered navigation. Hide facets without positive data. Distinguish an empty inventory from a filtered-out result.
-- Venue: breadcrumbs/name/location, responsive mosaic and swipeable mobile strip, native modal full-screen gallery (focus/escape/arrow keys), recorded facilities, description, address, dated check status, transparent pricing basis. Desktop contact panel/mobile sticky phone+WhatsApp; unavailable contact gets useful guidance, not dead buttons. Missing images get a labeled graphic, not fabricated photographs.
-- Search: venue name/locality/city search, noindex and shareable URL state.
-- About/privacy: manual listing/review standards, no booking promises, correction contact only when configured, aggregate analytics explained.
-- 404/error: navigable recovery, matching public shell, no internal error information. Canonical city/venue availability is checked in blocking metadata without an ancestor loading boundary, so missing or hidden records return a true HTTP 404 before body streaming.
-- Loading: skeletons exist only for `/cities`, `/search` and `/admin`. The root loading boundary was deliberately removed to protect canonical 404 status; city/venue navigation can wait for its lookup rather than immediately showing a skeleton. Request-memoized reads avoid duplicating metadata/page work.
+- **Home/cities:** city-first entry, genuine published inventory, listing standards and an intentional empty state. No research-JSON fallback.
+- **City:** introduction, actual count, name/locality search, inventory-derived facets, desktop sidebar/mobile filter dialog, coherent price basis, sorting and 12 venues per page. Distinguish no inventory, no matching results and an out-of-range page.
+- **Venue:** recorded facts, gallery, facilities, address and dated check status. Offer phone/WhatsApp only when recorded; unknown contacts get guidance, not dead buttons. A checked date is not endorsement, availability or a booking promise.
+- **Search/about/privacy:** shareable GET state, noindex search results, clear editorial/privacy limits and a corrections address only when configured.
+- **Errors:** navigable recovery without internal details. Missing/hidden canonical city and venue pages must return HTTP **404 before streaming**, not 200 with not-found text. Do not add ancestor loading boundaries; skeletons remain under `/cities`, `/search` and `/admin`.
 
-## Admin screens
+## Admin screens and saved previews
 
-- Login: email/password, no signup/reset workflow promising unavailable mail, setup notice if services are unconfigured, accessible inline errors.
-- Dashboard: actual counts, city workspaces, review queue and recent additions; no pseudo coverage percentage.
-- Cities: status/search, add city and workspace links. Add/edit form has name/state/country, stable slug, short intro, SEO and lifecycle. Covers are managed after first save.
-- City workspace: scoped counts, city controls, search/status-filtered table, preassociated add-venue CTA, edit and authenticated preview links, readiness guidance.
-- All venues: bounded searchable cross-city operations table, linking back to workspaces; city-scoped entry remains the primary flow.
-- Add/edit venue: basic/contact/details/location/research/SEO/publishing sections. Only essential fields required for drafts. Facilities indicate positive known facts, not assumed booleans. Source notes are private. Unpublished vs unverified are visibly distinct.
-- Photo manager: one at a time bounded multiple upload, readable progress/errors, preview, alt text and rights credit, move up/down keyboard controls, cover selection and removal. Saves against a real venue ID; no orphan uploads before first save.
-- Preview: same public detail component inside a clearly marked, authenticated noindex/no-store preview; never an unsigned query-parameter bypass.
-- Archive/delete: archive preferred, explicit name confirmation for permanent deletion; cannot delete published venues or a city containing venues. Queue failed object cleanup for retry.
+Login shows a configuration checklist until secure admin prerequisites are present. It must not request credentials in an unready state, offer a demo bypass or tell an operator to disable shared-project signup. There is no public registration or promised self-service recovery email flow.
 
-## Interaction/accessibility contract
+The dashboard leads to city workspaces, real counts and review/cleanup queues. City-scoped **Add venue** preselects the saved city. Forms distinguish publication, verification and editorial review; drafts require fewer fields, and sources stay private. The photo manager uses sequential uploads, readable progress/errors, alt text, public rights credit, keyboard ordering, cover selection and explicit deletion. Save the owner before uploads; archive before considering permanent deletion.
 
-44px primary touch targets, visible focus, one h1, semantic landmarks, skip navigation, explicit form labels, linked inline errors/live feedback, dialog focus management and escape. Avoid hover-only controls and motion-dependent information. `prefers-reduced-motion` honored. Native GET search/filter forms work without JavaScript; client JS enhances mobile dialogs and image interaction only.
+**Saved city preview** at `/admin/cities/[slug]/preview` renders the actual shared `CityDiscovery` view, not a mock screen. It includes saved draft and published venues, including under a non-public city; unpublished/archived venues are excluded. Search, facets, totals and pagination use the full eligible saved inventory. Cards link to protected venue previews and images use authenticated delivery.
 
-Photo processing preserves the oriented aspect ratio at target maximum widths of 480, 960 and 1600 pixels, without enlarging smaller sources. Those variant labels are not a promise that every stored image has that exact width.
+Both city and venue previews are authenticated, private/no-store and noindex, omit public canonical/structured-data claims and emit no analytics. Show the saved-state notice and city/venue statuses; unsaved form changes are not included. A preview is not a shareable public link. Source: [../src/components/public/city-discovery.tsx](../src/components/public/city-discovery.tsx).
 
-## QA matrix
+## Accessibility and media
 
-**Recorded on 2026-09-08:** the `many` scenario passed at all six Chromium viewports, **320, 375, 390, 414, 768 and 1440 px**: **166 passed, 1 intentional skip**. Desktop contributed **76 passed / 1 skipped**; the other widths contributed **90 passed / 0 skipped** (390 px: 38; each of 320/375/414/768 px: 13). The desktop skip is the mobile-only filter drawer, because desktop uses the persistent panel.
+Target usable **320 px** layouts, 44 px primary touch targets, one h1, landmarks, skip navigation, explicit labels, linked errors and live feedback. Dialogs contain focus, close with Escape and restore the exact opener. Avoid hover-only controls and respect reduced motion. Public GET forms work without JavaScript; the admin catalog and other interactive enhancements use JavaScript.
 
-Separate 390 px runs covered `empty` (**17 passed / 12 scenario-inapplicable skips**) and `one` (**24 passed / 9 scenario-inapplicable skips**). Total: **207 passed, 22 intentional skips; no failing assertions remain in the recorded runs**. Empty/one were not run at every width. Responsive checks run at every configured width; interaction and axe checks run at 390/1440 px, and HTTP checks run once at 1440 px.
+Keep `.a-table-wrap` positioned with `position: relative`: absolutely positioned screen-reader labels must stay inside their table scroller rather than widening the page. This fixes the observed admin overflow without hiding page overflow or weakening geometry/axe assertions. Source: [../src/app/admin/admin.css](../src/app/admin/admin.css).
 
-The browser evidence covers honest empty/missing-data states, filters and coherent price sorting, pagination, loaded synthetic diagrams and missing-image fallback, gallery arrows, modal Tab/Shift+Tab containment, Escape and exact-opener focus restoration. Key public routes and the unconfigured admin login pass the configured axe WCAG checks. Missing/invalid city and venue routes are asserted to return **actual HTTP 404**, not merely not-found content inside a 200 response. Anonymous admin redirects and direct media endpoint denials exercise the real local route boundaries without a demo authentication bypass.
+Preserve oriented image aspect ratios, explicit dimensions and responsive derivatives with maximum widths 480/960/1600, without enlargement. Missing real photos stay visibly missing; local generated images are labelled synthetic and never launch inventory.
 
-See [VERIFICATION.md](VERIFICATION.md) for evidence, test-layer boundaries and the separately reserved local visual/performance record, and [../README.md](../README.md) for the running localhost:3100 preview task. These are Chromium automation results, not Safari/WebKit/Firefox, physical-device, screen-reader or complete accessibility certification. SQL RLS tests use in-memory PGlite managed-schema stubs; real Supabase Auth/Storage, authenticated editorial workflows and final-domain mobile/accessibility/performance acceptance remain managed deployment requirements.
+An image that fails before hydration must still show the missing-photo fallback. `MediaPhoto` checks completed image state and `naturalWidth` without requiring `currentSrc`; healthy completed images remain visible. Keep the deterministic held-hydration failure test and healthy-image control rather than relying only on a post-hydration error event.
+
+## Evidence boundary
+
+Revision-scoped six-width scenario results, autocomplete/image regressions and real isolated Auth/city-cover/media workflows are recorded once in [VERIFICATION.md](VERIFICATION.md), separately from older hosted and pre-refactor runs. Passes and intentional skips are distinct; neither fixtures nor real local services certify managed production, physical devices, final-domain performance or full manual accessibility conformance.
+
+Public delayed/error stubs use a browser-context harness boundary, not a change to application Auth. Keep focused repeats distinct from full-scenario evidence; never present an earlier empty/one run as rerun after a harness-only repair.
+
+The original hosted Preview's non-leaking catalog 500 remains a historical finding, not an all-green smoke. New evidence must retain its exact code/environment scope. See [../README.md](../README.md) for run modes; current preview restoration is tracked only in the verification record.

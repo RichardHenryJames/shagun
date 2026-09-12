@@ -72,3 +72,35 @@ jobs:
             test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  authenticated-workflows:
+    name: Real local Auth, city publishing and Storage
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      SUPABASE_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start dedicated local Supabase
+        run: npm run integration:start
+      - name: Build with isolated real-service configuration
+        run: npm run build:integration
+      - name: Test authenticated mobile, tablet and desktop workflows
+        run: npm run test:integration
+      # No secrets, auth traces, populated form snapshots or database dump artifacts.
+      - name: Stop only the integration stack
+        if: ${{ always() }}
+        run: npm run integration:stop

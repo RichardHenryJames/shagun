@@ -100,6 +100,18 @@ button:not(:disabled), summary { cursor: pointer; }
 .sh-search-control:focus-within { outline: 2px solid var(--sh-sage); outline-offset: 3px; }
 .sh-search-control input:focus-visible { outline: none; }
 .sh-search-control .sh-button { white-space: nowrap; }
+.sh-city-search-form { position: relative; min-width: 0; }
+.sh-city-search-anchor { position: relative; min-width: 0; }
+.sh-city-search-anchor .sh-city-search-options { position: absolute; z-index: 30; inset-inline: 0; top: calc(100% + 8px); max-width: 100%; max-height: min(320px, 45dvh); margin: 0; padding: 4px; overflow-y: auto; overscroll-behavior-y: contain; border: 1px solid var(--sh-input-rule); border-radius: 8px; background: var(--sh-surface); box-shadow: 0 8px 24px #432c3d14; }
+.sh-city-search-options[hidden] { display: none; }
+.sh-city-search-option { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; min-height: 56px; padding: 10px 12px; border-inline-start: 3px solid transparent; border-radius: 4px; color: var(--sh-ink); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; cursor: pointer; }
+.sh-city-search-option strong { font-weight: 500; }
+.sh-city-search-option > span { color: var(--sh-ink-soft); font-size: 12px; }
+.sh-city-search-option:hover, .sh-city-search-option[aria-selected="true"] { background: var(--sh-sage-light); }
+.sh-city-search-option[aria-selected="true"] { border-inline-start-color: var(--sh-sage); }
+.sh-city-search-option:focus-visible { outline-offset: -3px; }
+.sh-city-search-status { margin: 12px 0 0; color: var(--sh-ink-soft); font-size: 12px; line-height: 1.8; }
+.sh-city-search-retry { margin-top: 8px; }
 .sh-city-shortcuts { display: flex; align-items: center; flex-wrap: wrap; column-gap: 16px; margin-top: 12px; font-size: 11px; line-height: 1.7; }
 .sh-city-shortcuts > span { color: var(--sh-muted); }
 .sh-city-shortcuts a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--sh-rule); }

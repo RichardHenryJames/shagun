@@ -1,139 +1,97 @@
 # Shagun
 
-A city-first wedding venue directory with open public discovery and private editorial inventory operations. Visitors browse recorded facts and contact venues directly; Shagun is not a booking, payment, availability, review or lead-selling service.
+A city-first wedding venue directory with open discovery and private editorial administration. Visitors browse recorded facts and contact venues directly. Shagun does not provide bookings, payments, availability, public registration, ratings or gated contacts.
 
-**Current status — 2026-09-08: source pushed, hosted CI passed; framework config fix awaiting redeploy verification; real inventory blocked.** CI success applies to the initial commit, not the pending follow-up or a verified public launch.
+## Current status — 2026-09-09
 
-- Latest full `npm run check`: **697 tests across 9 files passed**, with lint, route type generation and strict typecheck green. The original **692 tests are unchanged**, and all **five new database-access source-contract tests passed**. The previously passing normal Next.js production build already includes the action/research changes; later minor changes are limited to scripts, documentation and source-gate checks, with no new normal build for this docs update. The **207 browser passes / 22 skips are historical local isolated QA only**; no new full local matrix is recorded.
-- **Shagun: Local app preview** serves the normal build at **http://localhost:3000**, with fixtures disabled. The old port-3100 demo is stopped. The supplied manual check of four normal routes found no synthetic/test strings. The UI remains an **empty, unconfigured preparation state**, not live Hazaribag inventory.
-- Read-only shared-Supabase inspection recognizes the role's **already-configured `supautils.policy_grants` authority on `storage.objects`** (`storage_policy_manager=true`). The earlier `MIGRATION_PRIVILEGES` denial was a **local-runner false positive**, now resolved; table non-ownership is not a blocker. Inspection now fails **`stage=metadata-public code=22023`** in the catalog/preservation snapshot. The earlier SQL syntax error `42601` was fixed and parsed in isolated PGlite, but the runtime snapshot failure remains unresolved.
-- **No migration, seed, research import, provisioning or database write occurred; `shagun` does not exist. Further database writes/debugging are stopped pending review.** Review/fix the snapshot guard and obtain successful read-only inspection before separately authorizing apply; no forced bypass or new grants/ownership/RLS changes. Supabase API keys and a real admin account remain unavailable. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/VERIFICATION.md](docs/VERIFICATION.md).
-- **Initial code publication and hosted CI succeeded:** the 161-file root commit [2edd4fd](https://github.com/RichardHenryJames/shagun/commit/2edd4fd831808e6b8ffdf30c46d7265bc734c410) was pushed to `main`, with upstream tracking configured. [GitHub Actions run 34222982087](https://github.com/RichardHenryJames/shagun/actions/runs/34222982087) **completed / SUCCESS** for that exact initial commit; no hosted test counts were fetched.
-- **Vercel framework fix pending verification:** the initial deployment reached **Ready in 43 seconds**, but [the production domain](https://shagun-peach.vercel.app) still returns **Vercel 404**. The empty-repository import left **Framework Preset: Other**. Root [vercel.json](vercel.json) now explicitly sets `framework: nextjs`, `installCommand: npm ci` and `buildCommand: npm run build`; the parent will push the fix to trigger redeployment. The preview URL is SSO/Auth-gated, with no bypass attempted. This documentation-only follow-up remains **uncommitted/unpushed, pending parent publication**.
+**Managed SQL installed; public city autocomplete implemented; production promotion blocked.** Current check/matrix/integration results, publication scope, operator confirmations and preview/stack state are maintained only in [docs/VERIFICATION.md](docs/VERIFICATION.md). Earlier hosted passes are historical, not certification of later code.
 
-## Inventory and presentation
+- All **five migrations, 0001–0005**, and the draft Hazaribag seed are installed in shared Supabase project `ixkhyqqovacdramymqjk`. Apply-time preservation, read-only inspection and inventory observations have separate scopes in [docs/VERIFICATION.md](docs/VERIFICATION.md); SQL installation does not establish API or public readiness.
+- Home and the city directory now progressively enhance native GET search with bounded public-city suggestions. Venue search and the private admin GeoNames catalog remain separate.
+- **Critical shared-project exposure requires separately authorized remediation.** The `public.Order`/`public.ContactMessage` evidence and owner-approval status are in [docs/VERIFICATION.md](docs/VERIFICATION.md). Never retrieve customer rows to demonstrate impact or change sibling access as a Shagun side effect.
+- Production Vercel keys are saved; do not request them again. Current Data API/sign-in evidence is in [docs/VERIFICATION.md](docs/VERIFICATION.md), not inferred from historical HTTP failures. After private sign-in, verify the actual list and append `shagun` **only if absent and authorized**, preserving every other entry and excluding `shagun_private`.
+- Identity approval alone is not provisioning. A new unique password must be entered privately with the unchanged **12-character minimum**, followed by actual-UUID allowlisting and managed access checks. Provisioning status is recorded only in [docs/VERIFICATION.md](docs/VERIFICATION.md).
+- Research requires explicit draft import, actual editorial review and rights for any photos. Current import/review status is in [docs/VERIFICATION.md](docs/VERIFICATION.md). Do not substitute research or synthetic inventory for public records or infer readiness from the draft seed alone.
+- Publication remains **review-branch-only**. **Do not promote `main`/Production or force a launch** while the shared-security, API, real-admin, editorial and managed-acceptance/recovery gates remain open.
 
-- The explicit production seed creates **Hazaribag, Jharkhand, India, as a draft city only**. It does not activate the city or create venues, photographs, administrators or credentials. Reapplying it does not overwrite operator edits.
-- [data/research/hazaribag-2026-09-08.json](data/research/hazaribag-2026-09-08.json) prepares **12 real, source-cited business candidates with 27 source references**: the first seven contain real website-derived data for editorial review, not phone verification; five need source/contact follow-up. **All 12 remain unimported and unreviewed**, with draft/unverified status, private research notes and `photos: []`; this is neither exhaustive Hazaribag coverage nor confirmed contact information. No photo permission has been obtained. See [docs/HAZARIBAG_RESEARCH.md](docs/HAZARIBAG_RESEARCH.md).
-- A matching saved city's authenticated workspace now offers **Add researched drafts**. Import is explicit, insert-only and private; it skips existing city/slug records without overwriting edits, keeps new venues draft/unverified/unreviewed, and never activates the city. Other cities are admin-created, not a hardcoded public list.
-- An unconfigured application or a database with only the draft seed intentionally has no public inventory. Original decorative artwork and missing-photo illustrations are labeled as illustrations, not venue photographs.
-- Public discovery reads eligible database inventory only; it never falls back to the research JSON. Synthetic fixtures remain **isolated, clearly labelled local QA data only**, never launch inventory. Disabling fixtures for normal use does not hide their labels or weaken their safeguards.
+[docs/AUDIT.md](docs/AUDIT.md) records supported fixes and launch blockers; it does not treat every exploratory suggestion as a proven bug.
 
-## Architecture
+## Product and data boundaries
 
-| Area | Implementation |
+- [supabase/seed.sql](supabase/seed.sql) creates only the draft Hazaribag city, never venues, accounts or photos; conflicts do not overwrite edits. The facility vocabulary comes from the inventory migration.
+- [data/research/hazaribag-2026-09-08.json](data/research/hazaribag-2026-09-08.json) is a separate research batch, not public fallback data. **Add researched drafts** requires active admin authorization, skips existing city/slug records and leaves new entries draft/unverified/unreviewed. Website evidence is not contact verification or photo permission.
+- **Import Excel** in a saved city workspace provides a blank 29-column template, row validation and explicit import of up to **1,000 new drafts per workbook, 2 MiB maximum**. Confirmed 100-row requests show progress and can be stopped; uncertain requests are never automatically retried. Existing city/slug records are skipped without changing edits; imported venues remain unverified and unreviewed. Photos and publication stay in the existing editor workflow. See [docs/OPERATIONS.md](docs/OPERATIONS.md#excel-imports-for-a-saved-city).
+- **Add city** needs only a nationwide city search, an explicit result selection and **Create city**. The server derives the name, state, India, available slug and draft defaults; standard SEO needs no overrides. The GeoNames catalog has **7,112 places across 36 represented states/territories**, not thousands of saved or launched cities. Existing city editors retain their geographic associations, manual records and optional editorial controls.
+- Public city selection on home and `/cities` adds at most **8 name/state-labelled suggestions** from active public inventory, including an active empty guide under the existing visibility rule. Native GET search and **24-city pages** still work without JavaScript. Suggestions use only `/api/cities/suggestions`, never Auth, the private catalog or research fallback. Venue discovery retains the existing server `SearchBox`, **12 venues per page**, inventory-derived facets and comparable price bases.
+- Private source notes never enter public descriptions, city metadata, suggestions or photo credits. The suggestion response contains only `name`, `slug` and `state`; its bounds and cancellation contract are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- Saved city preview at `/admin/cities/[slug]/preview` uses the actual shared `CityDiscovery` interface and admin-only RPCs. It includes saved draft/published venues, is authenticated/noindex/no-store, emits no analytics and is not a shareable public link.
+- Synthetic records and generated images are local QA only, visibly labelled and never imported into the shared project. There is no demo Auth bypass.
+
+## Technical outline
+
+Next.js **16.3.3** App Router, React, strict TypeScript **5.9.3**, Supabase PostgreSQL/Auth/private Storage, Zod and Sharp. Server Components are the default. Typed PostgREST clients and atomic SQL RPCs avoid an extra ORM/runtime connection pool.
+
+Shagun uses isolated `shagun` / `shagun_private` namespaces, private `shagun-media` storage and `shagun-admin-auth` cookies within the approved shared project. Public inventory uses anonymous reads with active-city/published-venue predicates. Admin writes reauthorize managed Auth plus the active UUID allowlist, with SQL grants/RLS as additional enforcement. Preserve BihariBhojan data, existing API entries and shared Auth/Storage settings.
+
+### Main routes
+
+| Purpose | Routes |
 | --- | --- |
-| Application | Next.js **16.3.3** App Router, React, strict TypeScript **5.9.3**; Node.js 24 is the local/deployment baseline. |
-| Public interface | Server-rendered city discovery, name/locality search, inventory-derived filters, matching price bases, pagination, venue details, responsive galleries and direct phone/WhatsApp contact. Self-hosted fonts and a separate editorial public design. |
-| Private interface | Email/password login, inventory overview, city workspaces with matched research-import cards, draft/edit/publish forms, authenticated saved previews, photo management, review counts and retryable storage cleanup. |
-| Data access | Supabase PostgreSQL through typed supabase-js/PostgREST clients and narrow RPCs. **No ORM is deliberate**: complex queries and atomic writes stay in PostgreSQL without a separate serverless connection pool. |
-| Shared-project isolation | Inventory/RPC schema `shagun`, private helpers/ledger in `shagun_private`, private bucket `shagun-media`, admin cookie `shagun-admin-auth`. All application database clients select `db: { schema: "shagun" }`; runtime inventory never uses BihariBhojan's shared `public` tables. |
-| Authorization | Managed Supabase Auth plus an ID-based active `shagun.admin_users` allowlist. Every mutation revalidates the session and membership; RLS and SQL checks also enforce access. Shared Auth settings must not be changed globally without assessing BihariBhojan. |
-| Public data | Anonymous, session-free reads: active cities and published venues only. Private research is excluded from public documents. Live publication checks precede cached venue snapshots. |
-| Media | Private bucket, durable reservation before upload and atomic finalization. JPEG/PNG/WebP becomes aspect-ratio-preserving WebP variants without enlargement; public delivery checks ownership and admin previews are no-store. |
-| Consistency | Atomic save RPCs include facilities and private review records. Exact `updated_at` versions prevent stale overwrites. Deletion queues object cleanup transactionally. |
-| SEO and privacy | Canonicals, escaped factual JSON-LD, bounded sitemap partitions, noindex search/filter/preview pages. Optional aggregate analytics are off by default. |
-
-Detailed decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DESIGN.md](docs/DESIGN.md), [supabase/README.md](supabase/README.md).
-
-### Route map
-
-| Purpose | Route |
-| --- | --- |
-| Public entry/directory/search | `/`, `/cities`, `/search` |
-| Canonical city | `/city/[city]` |
-| City alias | `/city/[city]/vivah-bhawan` permanently redirects to the canonical city route, preserving query parameters. |
+| Public discovery | `/`, `/cities`, `/search`, `/city/[city]` |
+| Public city suggestions | `GET /api/cities/suggestions`, `q` only |
 | Venue detail | `/city/[city]/vivah-bhawan/[venue]` |
-| Listing standards/privacy | `/about`, `/privacy` |
-| Admin login/overview | `/admin/login`, `/admin` |
-| City-first administration | `/admin/cities`, `/admin/cities/new`, `/admin/cities/[city]`, `/admin/cities/[city]/edit`; `[city]` is the city slug. |
-| Venue administration | `/admin/venues`, `/admin/venues/new?city=…`, `/admin/venues/[id]`, `/admin/venues/[id]/preview`; the query selects a saved city UUID. |
-| Public image | `/media/[id]/[width]`, where width is `480`, `960` or `1600`; `[id]` is a media asset ID, not a storage path. |
-| Private image/management | `/api/admin/media` for uploads; `/api/admin/media/[id]` for authenticated preview, metadata/order/cover changes and deletion. Preview size uses `?w=480`, `?w=960` or `?w=1600`. |
+| Standards/privacy | `/about`, `/privacy` |
+| Private operations | `/admin/login`, `/admin`, `/admin/cities`, `/admin/venues` |
+| City workspace/edit/preview | `/admin/cities/[slug]`, `/admin/cities/[slug]/edit`, `/admin/cities/[slug]/preview` |
+| City-scoped Excel import | `/admin/cities/[slug]/import`; authenticated `GET`/`POST /api/admin/venue-import` |
+| Venue edit/preview | `/admin/venues/[id]`, `/admin/venues/[id]/preview` |
+| Media | Public `/media/[id]/[width]`; private `/api/admin/media` and `/api/admin/media/[id]` |
+| SEO | `/robots.txt`, request-time `/sitemap.xml` index and numbered partitions such as `/sitemap/0.xml` |
 
-## Local development
+The city alias `/city/[city]/vivah-bhawan` permanently redirects to the canonical city route. Missing/hidden canonical city and venue records must return a real HTTP 404 before streaming.
 
-Use Node.js **24** from the project root. The recorded Windows verification used **Node v24.15.0 and npm 11.12.1**; the current engine range is `>=22.0.0 <25` in [package.json](package.json). Install from [package-lock.json](package-lock.json) rather than upgrading packages to `latest`:
+Sitemaps no longer enumerate inventory during builds: new partitions appear at request time. Async robots makes no database query and advertises only the index URL. Non-indexable local environments return sitemap 404s; invalid/private rows, limit violations and service failures produce sanitized 503s. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-```powershell
-npm ci
-npm run dev
-```
+## Local development and test modes
 
-The development origin is `http://localhost:3000`. With Supabase settings blank and fixtures disabled, public pages show the intentional preparation state; this is not a working managed admin environment. For an ordinary **no-debug** session, run this server from the project root in VS Code's integrated terminal and open that origin; no debugger configuration is required.
+Use **Node 24** and `npm ci` from this root. The supported engine range is `>=22.0.0 <25`; use [package.json](package.json) and [package-lock.json](package-lock.json), not ad-hoc upgrades. Supabase CLI **2.116.0** remains pinned; `fflate` is patched to **0.8.3**. Revision-scoped dependency-audit evidence is in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
-For connected development, use a separate non-production Supabase project. Make a private local copy of [.env.example](.env.example) in the editor at the path required by the `admin:create` script in [package.json](package.json). **Shagun currently has no local environment file or configured API keys.** The shared database inspection reads the sibling project's selected `DIRECT_URL` privately; it neither configures the app nor supplies publishable/service API keys. Obtain those through an authorized operator's secret workflow, never through chat. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) documents the environment and remaining access gates.
+| Mode | Origin/services | Contract |
+| --- | --- | --- |
+| Default local preview | `http://localhost:3000`, normally no database | Fixtures off; intentional preparation state. **Shagun: Local app preview** serves an already-built normal app without a debugger. |
+| Public fixture QA | `http://localhost:3100`, no database | Explicitly labelled `empty`, `one` or `many` fixtures; matching build and runtime scenario required. |
+| Real local integration | Next at `http://localhost:3200`; Supabase API `http://127.0.0.1:55321`, database port **55322** | Real local Auth, REST, Storage and PostgreSQL; `SHAGUN_TEST_FIXTURES=false`; owned disposable project only. |
 
-### Commands and verification boundaries
+Actual build, preview-restoration and integration-stack state are recorded in [docs/VERIFICATION.md](docs/VERIFICATION.md). The default-mode contract above is not a claim that its preview is currently running.
 
-| Command | Purpose |
-| --- | --- |
-| `npm ci` | Reproducible dependency installation; requires a synchronized manifest and lockfile. |
-| `npm run dev` | Local Next.js development server, normally port 3000. |
-| `npm run start -- --hostname localhost` | Serve an already-built normal application at localhost:3000; used by **Shagun: Local app preview** with `SHAGUN_TEST_FIXTURES=false`. |
-| `npm run check` | ESLint, Next route type generation/TypeScript checking, then Vitest. |
-| `npm run build` | Normal production Next.js build, with fixtures disabled; never applies SQL, seeds inventory or provisions users. |
-| `npm run build:qa` | Isolated production-mode fixture build with the shared localhost:3100 environment; not deployment output. |
-| `npm run preview:qa` | Serve an already-built matching QA build at localhost:3100 for a local walkthrough; no database or authenticated admin. |
-| `npm run test:e2e` | Playwright owns the isolated fixture-only production server on port 3100; run `npm run build:qa` first and stop any preview using that port. |
-| `npm run admin:create` | Trusted interactive, out-of-band administrator creation; hidden password prompts, no credential arguments. |
+For ordinary development, use `npm run dev`. For the normal preview, build with `npm run build`, then use the existing preview task or `npm run start -- --hostname localhost`. Builds do not migrate, seed or provision managed services.
 
-The remaining scripts, including individual test/lint commands and the optional linked-project type-generation command, are defined in [package.json](package.json). The latter needs separately configured Supabase CLI access; it is not a migration, a default local prerequisite or a CI step.
+**Real-service local workflow**, in order, with each step succeeding before the next:
 
-### Isolated browser QA
+1. `npm ci`
+2. `npm run check` — lint, route types, strict typecheck and isolated Vitest/PGlite tests.
+3. `npm run integration:start` — requires a working local Docker engine; starts the dedicated local Supabase services.
+4. `npm run build:integration` — builds for the exact local service/origin contract.
+5. `npm run test:integration` — guarded owned-project reset/bootstrap, random local Auth accounts and the real browser workflow; Playwright owns the Next server.
+6. `npm run integration:stop` — stops only the dedicated integration project, retaining its local data.
 
-Use a separate local terminal/checkout without managed credentials or a `VERCEL` environment. **Stop the normal app preview before replacing its shared build output**, and stop any optional QA preview on port 3100 before E2E. Playwright owns port 3100; the default normal preview uses port 3000. Run each command only after the preceding command succeeds. This is a **local production-mode QA build**, not a Vercel deployment:
+[scripts/integration.ts](scripts/integration.ts) pins the local target, checks container/test ownership before destructive reset, refuses to adopt preexisting Shagun objects and keeps credentials in process memory/child environments rather than reports. Do not link this stack remotely or create production test records. Docker is **development-only**; it adds no paid deployment runtime.
 
-```powershell
-npm ci
-npm run check
-npm run build:qa
-npx playwright install chromium
-npm run test:e2e
-```
+The local Auth configuration deliberately combines `auth.email.enable_signup=true` (email/password provider enabled in this CLI version) with global `auth.enable_signup=false` (public registration denied and directly asserted). **Do not copy these settings into shared managed Auth automatically.**
 
-[scripts/qa.ts](scripts/qa.ts), [scripts/qa-environment.ts](scripts/qa-environment.ts) and [playwright.config.ts](playwright.config.ts) share **`http://localhost:3100` for compilation and runtime**, clear database/service-key settings, disable analytics and public contacts, and select only the intended local fixture scenario. Do not hand-edit origins, substitute `127.0.0.1`, use a development server or reuse a normal production build for these tests. Playwright starts its own `next start` server and refuses to reuse an existing server.
+**Fixture workflow:** `npm run build:qa`, then `npm run test:e2e`; `npm run preview:qa` is an optional manual preview, not a server for Playwright to reuse. Select `SHAGUN_FIXTURE_SCENARIO=empty|one|many` consistently before compilation and execution. Keep warnings and database/Vercel guards intact.
 
-Optional local-only `SHAGUN_FIXTURE_SCENARIO` accepts `empty`, `one` or `many` (default). Select it before both `npm run build:qa` and the matching preview/test run; rebuild when changing scenarios. The recorded `empty` and `one` runs used `npm run test:e2e -- --project=chromium-390`. [src/lib/testing/fixtures.ts](src/lib/testing/fixtures.ts) labels these records and test-card images as synthetic, with no dialable contacts or real venue locations; none is production seed data.
+All modes share generated build output. Stop the relevant preview before rebuilding, keep ports free for the owning test process and never hand-edit QA origins or reuse a mismatched build. After either test mode, rebuild normally before restarting the default preview. Never deploy fixture or integration output.
 
-[src/lib/config.ts](src/lib/config.ts) rejects fixtures on Vercel, with configured Supabase credentials, or on a non-local HTTP origin. Do not bypass those guards. Fixture browser tests cannot certify managed Auth, real Storage HTTP policies or real concurrent database sessions. PGlite uses an in-memory database with synthetic managed-service scaffolding, not an actual Supabase deployment.
+CI defines **two jobs**: Node **22** quality/fixture checks, then Node **24** real local Auth/Storage workflows using Docker. The authenticated job avoids credential/trace/dump artifacts and always attempts to stop its own integration stack. Revision-specific hosted counts and Preview evidence are canonical in [docs/VERIFICATION.md](docs/VERIFICATION.md); older passes never certify newer code or authorize production promotion.
 
-Normal and QA builds share generated output. Rebuild with `npm run build:qa` after a normal build or development session before QA. For a real release, build separately with **`npm run build`**, the intended production environment and fixtures disabled; never deploy QA output.
+## Release and operator documentation
 
-### Default local app preview in VS Code
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — data boundaries, consistency, media and rendering.
+- [docs/DESIGN.md](docs/DESIGN.md) — public/admin interfaces, city selection and protected previews.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) — trusted admin provisioning, research, publishing, cleanup and recovery.
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — saved Production configuration, remaining operator gates and cost estimates.
+- [docs/VERIFICATION.md](docs/VERIFICATION.md) — managed SQL evidence, completed local checks/build/matrix and pending release evidence.
+- [docs/AUDIT.md](docs/AUDIT.md) — fixed findings, rejected suggestions and separate shared-project risk.
 
-The first task in [.vscode/tasks.json](.vscode/tasks.json) is now **Shagun: Local app preview**. It runs `npm run start -- --hostname localhost` with `SHAGUN_TEST_FIXTURES=false`, serving the **normal production build at http://localhost:3000** without a debugger. It does not build automatically; use **Shagun: Build app preview** or `npm run build` before starting it after a build-mode change. Do not start a development server on the same port while it is running.
-
-The old port-3100 demo was stopped. The current standard public UI has **no test/synthetic wording or listings** because fixture mode is off, not because labels were concealed. With no Shagun API configuration or authenticated admin session, this is an **unconfigured preparation-state walkthrough**, not public live Hazaribag data.
-
-The optional `npm run preview:qa` workflow remains separate: first make a matching `npm run build:qa`, then serve explicitly labelled fixtures at localhost:3100. Preserve all fixture warnings and guards. Stop whichever preview is using the generated output before rebuilding; after QA, rebuild normally before returning to the default app task.
-
-### Completed local checks and historical QA — 2026-09-08
-
-| Command | Recorded local result on Node v24.15.0 / npm 11.12.1 |
-| --- | --- |
-| `npm run check` | **Full check passed:** lint, route type generation, strict typecheck and **697 tests across 9 files**. The original 692-test set is unchanged; all five new database-access source-contract tests passed. Per-file counts are in [docs/VERIFICATION.md](docs/VERIFICATION.md). |
-| `npm run build` | **Previously recorded normal Next.js production build passed**, already including the action/research changes. Later minor changes are scripts, documentation and source-gate checks; no new build for this docs update, deployment or managed-service certification is claimed. |
-| `npm run build:qa` | **Historical local** isolated QA build passed; not rerun locally for this documentation update. Initial-commit hosted CI success is recorded separately below. |
-
-**Historical local Chromium results only — no new full local browser matrix is recorded:**
-
-| Browser scenario | Recorded widths | Passed | Intentionally skipped |
-| --- | --- | ---: | ---: |
-| `many` | 320, 375, 390, 414, 768, 1440 px | 166 | 1 |
-| `empty` | 390 px | 17 | 12 |
-| `one` | 390 px | 24 | 9 |
-| **Total historical browser executions** | Above scenario/width combinations | **207** | **22** |
-
-Those historical runs recorded no failing assertions. The many-scenario desktop run is **76 passed / 1 skipped**; the other five widths total **90 passed / 0 skipped**. The desktop skip intentionally excludes the mobile filter drawer; empty/one skips are scenario-inapplicable tests, not waived failures. Coverage included actual HTTP 404 responses, discovery/filter/sort/pagination behavior, gallery/fallback and modal keyboard focus, axe checks on key routes, and anonymous admin boundaries. This is not current-build browser, authenticated-admin or actual-service proof. No commands, tests or external checks were run for this docs-only refresh.
-
-## Deployment and operations
-
-1. Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): keep database work stopped pending review, fix the catalog/preservation snapshot guard and obtain successful read-only inspection before separately authorizing atomic migration application and the optional draft-city seed. Existing delegated Storage-policy authority needs no ownership escalation. All four SQL files use Shagun-only application namespaces. Preserve existing BihariBhojan data, Auth/Storage ownership, grants and policies.
-2. Follow [docs/OPERATIONS.md](docs/OPERATIONS.md): saved city → explicit researched-draft import or manual draft → authorized photos → saved preview → private-source review → publish venue → explicitly activate city. The 12 candidates have **not** reached import or live editorial review.
-3. Read [supabase/README.md](supabase/README.md) before changing schema, RLS, grants, public metadata or image cleanup behavior.
-4. [.github/workflows/ci.yml](.github/workflows/ci.yml) is configured for **Node 22**, `npm run check`, `npm run build:qa` and Chromium, with no service secrets and read-only permissions. [Run 34222982087](https://github.com/RichardHenryJames/shagun/actions/runs/34222982087) **completed / SUCCESS** for `2edd4fd831808e6b8ffdf30c46d7265bc734c410`. No hosted test counts were fetched; local counts above are not hosted counts. This initial-commit pass does not cover the pending framework/docs follow-up, deploy the app or certify managed services.
-
-**Publication follow-up:** the initial push used Git Credential Manager's existing **`RichardHenryJames`** owner credential and set `main` to track `origin/main`; no Git user identity was changed. The recorded release safety check covered **161 files with no findings**, and no secrets were leaked. The separate `gh` CLI account's `push=false` is a different credential context, not a blocker after this successful Git push. **This documentation-only follow-up remains uncommitted/unpushed, pending the parent.** Verify the framework-fix redeployment and actual production routes before claiming public success; the initial **Ready** state did not prevent Vercel 404. Supabase API/service keys, real admin access and successful full read-only inspection remain separate blockers; obtain credentials only through an authorized non-chat workflow.
-
-Do not promise zero-cost production: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) contains recorded planning estimates, not a fresh independent vendor check. Verify current prices and terms, including Vercel Hobby's non-commercial restriction and Supabase Free's inactivity/quotas and lack of automatic backups. Budget for an appropriate commercial plan, database **and** storage/Auth recovery, a domain and bandwidth.
+No private secrets belong in chat, command arguments, screenshots or source control. After the API/operator gates, provision the supplied identity privately through the dashboard/actual-UUID allowlist procedure or `npm run admin:create` with hidden password entry in a trusted terminal. Local Auth and the helper retain their 12-character minimum; never persist a chat-supplied credential or lower the policy. Neither provisioning path is a build step. Identity approval alone does not satisfy private provisioning, shared-owner security authorization or real editorial review; no production launch is authorized here.

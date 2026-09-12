@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { City, CitySummary, DashboardData, Facets, Photo, PublicVenue, SearchResult, VenueResearch } from "../../src/lib/types";
+import { PAGE_SIZE, type City, type CitySummary, type DashboardData, type Facets, type Photo, type PublicVenue, type SearchResult, type VenueResearch } from "../../src/lib/types";
 
 // All venues, additional cities, users, addresses and provenance in this file are
 // SYNTHETIC. They are created only in an isolated, in-memory PostgreSQL instance.
@@ -25,6 +25,7 @@ const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/0001_
 const storageMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/0002_storage.sql"), "utf8");
 const sitemapMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/0003_sitemap.sql"), "utf8");
 const mediaUploadsMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/0004_media_uploads.sql"), "utf8");
+const cityPreviewMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/0005_city_preview.sql"), "utf8");
 const seed = readFileSync(resolve(process.cwd(), "supabase/seed.sql"), "utf8");
 let db: PGlite;
 let sequence = 0;
@@ -32,6 +33,17 @@ let hazaribag: string;
 let sharedBefore: Awaited<ReturnType<typeof sharedState>>;
 let sharedAfter: Awaited<ReturnType<typeof sharedState>>;
 let initialAllowlist: { id: string }[];
+let legacyBeforePreview: Awaited<ReturnType<typeof legacyRoutines>>;
+let legacyAfterPreview: Awaited<ReturnType<typeof legacyRoutines>>;
+
+async function legacyRoutines() {
+  return (await db.query(`select n.nspname, p.proname, p.proowner::text, p.proacl::text,
+    pg_catalog.pg_get_functiondef(p.oid) as definition
+    from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname in ('shagun', 'shagun_private') and p.prokind = 'f'
+      and p.proname not in ('preview_city_venues', 'preview_city_facets', 'city_preview_inventory')
+    order by n.nspname, p.proname`)).rows;
+}
 
 async function siblingData(database: PGlite = db): Promise<Inputs> {
   return (await database.query<{ value: Inputs }>(`select jsonb_build_object(
@@ -208,6 +220,10 @@ async function search(args: Inputs = {}, role: Role = "anon", subject: string | 
   return rpc<SearchResult>("search_venues", args, role, subject);
 }
 
+async function cityPreview(args: Inputs = {}, subject: string | null = ADMIN): Promise<SearchResult> {
+  return rpc<SearchResult>("preview_city_venues", { p_city: hazaribag, ...args }, "authenticated", subject);
+}
+
 async function remove(kind: "city" | "venue", id: string, overrides: Inputs = {}) {
   const original = kind === "city" ? await city(id) : await document(id);
   return rpc<void>("delete_record", { p_kind: kind, p_id: id, p_name: original.name, p_expected: original.updated_at, ...overrides });
@@ -297,6 +313,9 @@ beforeAll(async () => {
   await db.exec(storageMigration);
   await db.exec(sitemapMigration);
   await db.exec(mediaUploadsMigration);
+  legacyBeforePreview = await legacyRoutines();
+  await db.exec(cityPreviewMigration);
+  legacyAfterPreview = await legacyRoutines();
   sharedAfter = await sharedState();
   initialAllowlist = (await db.query<{ id: string }>("select id from shagun.admin_users order by id")).rows;
 }, 120_000);
@@ -337,7 +356,7 @@ describe("shared Supabase namespace isolation", () => {
     expect(await count('public."ContactMessage"', "authenticated", SIBLING_USER)).toBe(1);
   });
 
-  it("grants schema usage without creation and preserves the explicit grants on all 17 Shagun RPCs", async () => {
+  it("grants schema usage without creation and preserves the explicit grants on all 19 Shagun RPCs", async () => {
     for (const role of ["anon", "authenticated", "service_role"] as const) {
       expect(await rows(`select
         has_schema_privilege(current_user, 'shagun', 'USAGE') as inventory_usage,
@@ -356,6 +375,8 @@ describe("shared Supabase namespace isolation", () => {
       delete_record: ["authenticated"],
       finalize_media_upload: ["authenticated"],
       is_admin: ["authenticated", "service_role"],
+      preview_city_facets: ["authenticated"],
+      preview_city_venues: ["authenticated"],
       public_cities: ["anon", "authenticated", "service_role"],
       record_event: ["service_role"],
       save_city: ["authenticated"],
@@ -370,7 +391,7 @@ describe("shared Supabase namespace isolation", () => {
       where has_function_privilege(r.name, p.oid, 'EXECUTE') order by r.position
     ) as roles from pg_catalog.pg_proc p
       where p.pronamespace = 'shagun'::regnamespace and p.prokind = 'f' order by p.proname`);
-    expect(functions).toHaveLength(17);
+    expect(functions).toHaveLength(19);
     expect(functions).toEqual(Object.entries(expected).map(([name, roles]) => ({ name, roles })));
   });
 
@@ -402,12 +423,12 @@ describe("shared Supabase namespace isolation", () => {
     expect(await siblingData()).toEqual(sharedBefore.siblingData);
   }, 30_000);
 
-  it("lets an executor roll back all four migrations and their exact SQL/checksum ledger together", async () => {
+  it("lets an executor roll back all five migrations and their exact SQL/checksum ledger together", async () => {
     const isolated = new PGlite();
     try {
       await bootstrapSharedProject(isolated);
       const before = await sharedState(isolated);
-      const sources = [migration, storageMigration, sitemapMigration, mediaUploadsMigration];
+      const sources = [migration, storageMigration, sitemapMigration, mediaUploadsMigration, cityPreviewMigration];
       const expected = sources.map((sql_source, index) => ({
         version: index + 1, sql_source, sha256: createHash("sha256").update(sql_source).digest("hex"),
       }));
@@ -668,6 +689,262 @@ describe("actual JWT-role RLS and private/public separation", () => {
       await expect(rows(`insert into shagun.${table} default values`, [], "anon", null)).rejects.toMatchObject({ code: "42501" });
       await expect(rows(`delete from shagun.${table}`, [], "anon", null)).rejects.toMatchObject({ code: "42501" });
     });
+});
+
+describe("saved-city preview RPCs under real roles", () => {
+  const emptyFacets: Facets = { facilities: [], venueTypes: [], hasCapacity: false, priceTypes: [] };
+  const privateExpressions = [
+    "shagun.preview_city_venues(p_city => $1)", "shagun.preview_city_facets(p_city => $1)",
+    "(select count(*) from shagun_private.city_preview_inventory($1))",
+  ];
+
+  async function previewInventory() {
+    const lotus = await createVenue({ name: "Synthetic Lotus Hall", locality: "Synthetic Bazaar", address: "123 Synthetic Orchard Road",
+      capacity_max: 500, price_min: 10000, price_max: 20000, price_type: "per_day", facilities: ["ac", "parking"] });
+    const river = await published({ name: "Synthetic River Hall", capacity_max: 1000, price_max: 30000, price_type: "per_day", facilities: ["parking"] });
+    const plate = await createVenue({ name: "Synthetic Plate Hall", venue_type: "hotel", capacity_min: 100,
+      price_min: 700, price_type: "per_plate", facilities: ["rooms"] });
+    const unknown = await createVenue({ name: "Synthetic Unknown Facts", price_type: "per_day" });
+    for (const status of ["unpublished", "archived"]) {
+      await createVenue({ name: `Synthetic Lotus ${status}`, status, facilities: ["ac", "parking", "lift"],
+        capacity_max: 90000, price_min: 1, price_type: "per_day", venue_type: "resort" });
+    }
+    const other = await createCity();
+    await published({ name: "Synthetic Lotus Other City", facilities: ["kitchen"], price_min: 1, price_type: "per_event" }, other);
+    return { lotus, river, plate, unknown, other };
+  }
+
+  it("adds only the preview routines and leaves every 0001-0004 function definition, owner and ACL unchanged", async () => {
+    expect(legacyBeforePreview).toHaveLength(31); // 17 public-schema RPCs plus 14 private helpers.
+    expect(legacyAfterPreview).toEqual(legacyBeforePreview);
+    expect(await rows(`select n.nspname, count(*)::integer as count
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('shagun', 'shagun_private') and p.prokind = 'f'
+      group by n.nspname order by n.nspname`)).toEqual([
+      { nspname: "shagun", count: 19 }, { nspname: "shagun_private", count: 15 },
+    ]);
+  });
+
+  it("installs exact invoker signatures/defaults and authenticated-only ACLs, including the private helper", async () => {
+    const routines = await rows(`select p.proname as name, oidvectortypes(p.proargtypes) as args,
+      p.pronargdefaults as defaults, p.prosecdef as definer, p.provolatile as volatility,
+      p.proretset as returns_set, p.prorettype = 'jsonb'::regtype as returns_json,
+      p.prorettype = 'shagun.venues'::regtype as returns_venues,
+      (p.proconfig @> array['search_path=""']::text[] or p.proconfig @> array['search_path=']::text[]) as locked_path,
+      exists(select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+        where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public_execute,
+      array(select r.name from unnest(array['anon', 'authenticated', 'service_role']) with ordinality r(name, position)
+        where has_function_privilege(r.name, p.oid, 'EXECUTE') order by r.position) as roles
+      from pg_proc p where (p.pronamespace = 'shagun'::regnamespace and p.proname in ('preview_city_venues', 'preview_city_facets'))
+        or (p.pronamespace = 'shagun_private'::regnamespace and p.proname = 'city_preview_inventory') order by p.proname`);
+    const common = { definer: false, volatility: "s", locked_path: true, public_execute: false, roles: ["authenticated"] };
+    expect(routines).toEqual([
+      { ...common, name: "city_preview_inventory", args: "uuid", defaults: 0, returns_set: true, returns_json: false, returns_venues: true },
+      { ...common, name: "preview_city_facets", args: "uuid", defaults: 0, returns_set: false, returns_json: true, returns_venues: false },
+      { ...common, name: "preview_city_venues", args: "uuid, text, integer, numeric, text, text[], text, text, integer, integer",
+        defaults: 9, returns_set: false, returns_json: true, returns_venues: false },
+    ]);
+    const args = await rows<{ name: string; args: string }>(`select proname as name, pg_get_function_arguments(oid) as args
+      from pg_proc where pronamespace = 'shagun'::regnamespace and proname in ('search_venues', 'preview_city_venues')`);
+    const publicArgs = args.find((entry) => entry.name === "search_venues")!.args;
+    expect(publicArgs).toContain("p_city uuid DEFAULT NULL::uuid, ");
+    expect(args.find((entry) => entry.name === "preview_city_venues")!.args)
+      .toBe(publicArgs.replace("p_city uuid DEFAULT NULL::uuid, ", "p_city uuid, "));
+  });
+
+  it("denies anon and service-role execution even with an active admin UUID, and authorizes before invalid-city checks", async () => {
+    await published();
+    await activate(); // An outsider can read public inventory, but cannot execute a preview.
+    for (const [role, subject] of [["anon", null], ["anon", ADMIN], ["service_role", null], ["service_role", ADMIN]] as const) {
+      for (const expression of privateExpressions) {
+        await expect(value(expression, [hazaribag], role, subject)).rejects.toMatchObject({ code: "42501" });
+      }
+    }
+    for (const subject of [STRANGER, SIBLING_USER, INACTIVE_ADMIN, null]) {
+      for (const expression of privateExpressions) {
+        for (const cityId of [hazaribag, null]) {
+          await expect(value(expression, [cityId], "authenticated", subject))
+            .rejects.toMatchObject({ code: "42501", message: "admin_required" });
+        }
+      }
+      await expect(rpc("preview_city_venues", { p_city: hazaribag, p_page: 0 }, "authenticated", subject))
+        .rejects.toMatchObject({ code: "42501", message: "admin_required" });
+    }
+  }, 30_000);
+
+  it("rechecks revoked membership on every preview and still permits another active editor", async () => {
+    const id = await createVenue({ facilities: ["parking"] });
+    expect((await cityPreview()).items.map((venue) => venue.id)).toEqual([id]);
+    await rows("update shagun.admin_users set is_active = false where id = $1", [ADMIN], "service_role", null);
+    for (const expression of privateExpressions) {
+      await expect(value(expression, [hazaribag])).rejects.toMatchObject({ code: "42501", message: "admin_required" });
+    }
+    expect((await cityPreview({}, SECOND_ADMIN)).items.map((venue) => venue.id)).toEqual([id]);
+    expect(await rpc("preview_city_facets", { p_city: hazaribag }, "authenticated", SECOND_ADMIN))
+      .toEqual({ facilities: ["parking"], venueTypes: ["vivah_bhawan"], hasCapacity: false, priceTypes: [] });
+  });
+
+  it.each(["draft", "active", "inactive", "archived"] as const)(
+    "previews only draft/published rows in a %s city without widening any public predicate", async (status) => {
+      const draft = await createVenue({ name: "Synthetic Alpha Draft", venue_type: "banquet_hall", facilities: ["ac"], capacity_max: 300, price_max: 1000, price_type: "per_day" });
+      const live = await published({ name: "Synthetic Beta Published", venue_type: "hotel", facilities: ["rooms"] });
+      await createVenue({ status: "unpublished", venue_type: "resort", facilities: ["lift"], price_min: 1, price_type: "per_plate" });
+      await createVenue({ status: "archived", venue_type: "community_hall", facilities: ["kitchen"], price_min: 1, price_type: "per_event" });
+      const other = await createCity();
+      await createVenue({ venue_type: "wedding_lawn", facilities: ["catering"] }, other);
+      await published({}, other);
+      if (status === "active") await activate();
+      else if (status !== "draft") await editCity(hazaribag, { status });
+      const preview = await cityPreview({ p_sort: "name", p_limit: PAGE_SIZE });
+      expect(preview).toMatchObject({ total: 2, page: 1, pageSize: 12 });
+      expect(preview.items.map((venue) => [venue.id, venue.status, venue.city.id, venue.city.status]))
+        .toEqual([[draft, "draft", hazaribag, status], [live, "published", hazaribag, status]]);
+      expect(await rpc("preview_city_facets", { p_city: hazaribag })).toEqual({
+        facilities: ["ac", "rooms"], venueTypes: ["banquet_hall", "hotel"], hasCapacity: true, priceTypes: ["per_day"],
+      });
+      for (const [role, subject] of [["anon", null], ["authenticated", STRANGER], ["authenticated", ADMIN], ["service_role", null]] as const) {
+        const publicResult = await search({ p_city: hazaribag }, role, subject);
+        expect(publicResult.total).toBe(status === "active" ? 1 : 0);
+        expect(publicResult.items.map((venue) => venue.id)).toEqual(status === "active" ? [live] : []);
+        expect(await rpc("city_facets", { p_city: hazaribag }, role, subject)).toEqual(status === "active"
+          ? { facilities: ["rooms"], venueTypes: ["hotel"], hasCapacity: false, priceTypes: [] } : emptyFacets);
+        expect((await rpc<CityResults>("public_cities", {}, role, subject)).items.map((entry) => entry.id))
+          .toEqual(status === "active" ? [hazaribag] : []);
+      }
+    }, 30_000,
+  );
+
+  it("returns exact empty shapes for empty/missing cities and rejects a null or omitted city even with no inventory", async () => {
+    for (const cityId of [hazaribag, MISSING]) {
+      expect(await cityPreview({ p_city: cityId })).toEqual({ total: 0, items: [], page: 1, pageSize: 12 });
+      expect(await rpc("preview_city_facets", { p_city: cityId })).toEqual(emptyFacets);
+    }
+    for (const expression of privateExpressions) {
+      await expect(value(expression, [null])).rejects.toMatchObject({ code: "22023", message: "city_required" });
+    }
+    for (const name of ["preview_city_venues", "preview_city_facets"]) {
+      await expect(rpc(name)).rejects.toMatchObject({ code: "42883" });
+    }
+  });
+
+  it("matches safe prefix tokens in venue name, locality, address, city and state without searching private notes", async () => {
+    const { lotus } = await previewInventory();
+    for (const query of ["lot", "synthet lot", "baza", "orchar", "  lot  ", "lot | ' & :* "]) {
+      expect((await cityPreview({ p_query: query })).items.map((venue) => venue.id)).toEqual([lotus]);
+    }
+    for (const query of ["hazar", "jhark"]) expect((await cityPreview({ p_query: query })).total).toBe(4);
+    for (const query of ["provenance", "'); DROP TABLE venues; --", "':* &|()"])
+      expect((await cityPreview({ p_query: query })).total).toBe(0);
+    expect(await count("shagun.venues")).toBe(7);
+    expect((await search()).total).toBe(0); // All cities remain draft.
+  }, 30_000);
+
+  it("requires every facility, a sufficient recorded maximum capacity and the requested venue type", async () => {
+    const { lotus, river, plate } = await previewInventory();
+    expect((await cityPreview({ p_facilities: ["parking", "ac"] })).items.map((venue) => venue.id)).toEqual([lotus]);
+    expect((await cityPreview({ p_facilities: ["ac", "rooms"] })).total).toBe(0);
+    expect((await cityPreview({ p_facilities: ["ac", "ac"] })).total).toBe(1);
+    expect((await cityPreview({ p_capacity: 501 })).items.map((venue) => venue.id)).toEqual([river]);
+    expect((await cityPreview({ p_capacity: 500, p_facilities: ["parking"], p_sort: "capacity" })).items.map((venue) => venue.id)).toEqual([lotus, river]);
+    expect((await cityPreview({ p_capacity: 1 })).total).toBe(2); // capacity_min alone is not a promise.
+    expect((await cityPreview({ p_type: "hotel" })).items.map((venue) => venue.id)).toEqual([plate]);
+    expect((await cityPreview({ p_type: "resort" })).total).toBe(0); // Unpublished/archived are excluded.
+  }, 30_000);
+
+  it("compares prices only within a basis and uses a recorded maximum when the minimum is unknown", async () => {
+    const { lotus, river, plate, unknown } = await previewInventory();
+    expect((await cityPreview({ p_budget: 15000, p_price_type: "per_day" })).items.map((venue) => venue.id)).toEqual([lotus]);
+    expect((await cityPreview({ p_budget: 1000, p_price_type: "per_plate" })).items.map((venue) => venue.id)).toEqual([plate]);
+    expect((await cityPreview({ p_budget: 30000, p_price_type: "per_day", p_sort: "price" })).items.map((venue) => venue.id)).toEqual([lotus, river]);
+    expect((await cityPreview({ p_budget: 29999, p_price_type: "per_day" })).total).toBe(1);
+    expect((await cityPreview({ p_price_type: "per_day", p_sort: "price" })).items.map((venue) => venue.id)).toEqual([lotus, river, unknown]);
+    expect(await rpc("preview_city_facets", { p_city: hazaribag })).toEqual({
+      facilities: ["ac", "parking", "rooms"], venueTypes: ["hotel", "vivah_bhawan"], hasCapacity: true, priceTypes: ["per_day", "per_plate"],
+    });
+  }, 30_000);
+
+  it("uses all four sorts, deterministic ID ties and nulls-last facts", async () => {
+    const { lotus, river, plate, unknown } = await previewInventory();
+    expect((await cityPreview({ p_sort: "name" })).items.map((venue) => venue.id)).toEqual([lotus, plate, river, unknown]);
+    expect((await cityPreview({ p_sort: "capacity" })).items.map((venue) => venue.id)).toEqual([lotus, river, ...[plate, unknown].sort()]);
+    expect((await cityPreview({ p_sort: "price", p_price_type: "per_day" })).items.map((venue) => venue.id)).toEqual([lotus, river, unknown]);
+    await editVenue(lotus, { description: "Synthetic most recent edit" });
+    expect((await cityPreview({ p_sort: "recent" })).items[0].id).toBe(lotus);
+    // One transaction ties all eligible updated_at values; UUID is the final key.
+    await rows("update shagun.venues set updated_at = transaction_timestamp() where city_id = $1 and status in ('draft', 'published')", [hazaribag]);
+    expect((await cityPreview()).items.map((venue) => venue.id)).toEqual([lotus, river, plate, unknown].sort());
+    const twinA = await createVenue({ name: "Synthetic Twin", capacity_max: 250, price_min: 1000, price_type: "per_day" });
+    const twinB = await createVenue({ name: "synthetic twin", capacity_max: 250, price_max: 1000, price_type: "per_day" });
+    for (const sort of ["name", "capacity", "price"]) {
+      expect((await cityPreview({ p_query: "twi", p_sort: sort, p_price_type: "per_day" })).items.map((venue) => venue.id)).toEqual([twinA, twinB].sort());
+    }
+  }, 30_000);
+
+  it("paginates beyond the 25-row admin list and computes facets from the entire eligible city, not a search/page", async () => {
+    const ids: string[] = [];
+    for (let index = 1; index <= 27; index++) {
+      ids.push(await createVenue({ name: `Synthetic Preview ${String(index).padStart(3, "0")}`,
+        ...(index === 27 ? { status: "published", reviewed: true, venue_type: "hotel", facilities: ["lift"], capacity_max: 700, price_max: 900, price_type: "per_plate" } : {}) }));
+    }
+    await createVenue({ status: "unpublished", venue_type: "resort", facilities: ["kitchen"], price_min: 1, price_type: "per_event" });
+    const first = await cityPreview({ p_sort: "name", p_limit: PAGE_SIZE });
+    const second = await cityPreview({ p_sort: "name", p_limit: PAGE_SIZE, p_page: 2 });
+    const third = await cityPreview({ p_sort: "name", p_page: 3 });
+    expect(PAGE_SIZE).toBe(12);
+    expect(first).toMatchObject({ total: 27, page: 1, pageSize: 12 });
+    expect(second).toMatchObject({ total: 27, page: 2, pageSize: 12 });
+    expect(third).toMatchObject({ total: 27, page: 3, pageSize: 12 });
+    expect(first.items.map((venue) => venue.id)).toEqual(ids.slice(0, 12));
+    expect(second.items.map((venue) => venue.id)).toEqual(ids.slice(12, 24));
+    expect(third.items.map((venue) => venue.id)).toEqual(ids.slice(24));
+    expect(new Set([...first.items, ...second.items, ...third.items].map((venue) => venue.id)).size).toBe(27);
+    expect(await cityPreview({ p_sort: "name" })).toEqual(first);
+    expect(await cityPreview({ p_sort: "name", p_page: 2 })).toEqual(second);
+    const expectedFacets = { facilities: ["lift"], venueTypes: ["hotel", "vivah_bhawan"], hasCapacity: true, priceTypes: ["per_plate"] };
+    expect(await rpc("preview_city_facets", { p_city: hazaribag })).toEqual(expectedFacets);
+    const filtered = await cityPreview({ p_query: "001" });
+    expect(filtered).toMatchObject({ total: 1, page: 1, pageSize: 12 });
+    expect(filtered.items.map((venue) => venue.id)).toEqual([ids[0]]);
+    expect(await rpc("preview_city_facets", { p_city: hazaribag })).toEqual(expectedFacets);
+    expect(await cityPreview({ p_page: 1000, p_limit: 25 })).toEqual({ items: [], total: 27, page: 1000, pageSize: 25 });
+  }, 30_000);
+
+  it("does not infer positive facets from a minimum-only capacity or a price basis with no amount", async () => {
+    await createVenue({ capacity_min: 50, price_type: "per_event" });
+    expect(await rpc("preview_city_facets", { p_city: hazaribag }))
+      .toEqual({ ...emptyFacets, venueTypes: ["vivah_bhawan"] });
+    await createVenue({ capacity_max: 500, price_max: 1000, price_type: "per_event", facilities: ["parking"] });
+    expect(await rpc("preview_city_facets", { p_city: hazaribag }))
+      .toEqual({ facilities: ["parking"], venueTypes: ["vivah_bhawan"], hasCapacity: true, priceTypes: ["per_event"] });
+  });
+
+  it("returns the shared venue/city/photo/facility JSON shape without private research or the search vector", async () => {
+    const marker = "SYNTHETIC_PREVIEW_PRIVATE_PROVENANCE";
+    const draft = await createVenue({ name: "Synthetic Alpha Preview", source_notes: marker, facilities: ["parking", "ac"] });
+    const live = await published({ name: "Synthetic Beta Preview", source_notes: marker });
+    const image = await photo({ venue_id: draft });
+    await photo({ city_id: hazaribag });
+    const result = await cityPreview({ p_sort: "name" });
+    expect(Object.keys(result).sort()).toEqual(["items", "page", "pageSize", "total"]);
+    expect(result).toEqual({ total: 2, page: 1, pageSize: 12, items: [await document(draft), await document(live)] });
+    expect(result.items[0]).toMatchObject({ status: "draft", verification_status: "unverified", city: { id: hazaribag, status: "draft" }, facilities: ["ac", "parking"] });
+    expect(result.items[0].photos).toEqual([image]);
+    for (const forbidden of [marker, "source_notes", "reviewed_by", "reviewed_at", '"research"', "search_document"])
+      expect(JSON.stringify(result)).not.toContain(forbidden);
+    expect((await research(draft)).source_notes).toBe(marker);
+    expect((await research(live)).reviewed_by).toBe(ADMIN);
+    expect(await search()).toEqual({ total: 0, page: 1, pageSize: 12, items: [] });
+  });
+
+  it.each([
+    { p_city: null }, { p_query: null }, { p_query: "x".repeat(101) }, { p_page: null }, { p_page: 0 }, { p_page: 1001 },
+    { p_limit: null }, { p_limit: 0 }, { p_limit: 26 }, { p_capacity: 0 }, { p_capacity: 100001 },
+    { p_budget: 1000 }, { p_budget: -1, p_price_type: "per_day" }, { p_budget: 100000001, p_price_type: "per_day" },
+    { p_sort: "price" }, { p_sort: null }, { p_sort: "popularity" }, { p_type: "palace" }, { p_price_type: "per_guest" },
+    { p_facilities: null }, { p_facilities: [null] }, { p_facilities: ["unknown"] }, { p_facilities: Array(10).fill("ac") },
+  ])("rejects invalid/unbounded preview inputs before querying inventory: %j", async (args) => {
+    await expect(cityPreview(args)).rejects.toMatchObject({ code: "22023" });
+  });
 });
 
 describe("publication, editorial review, stable URLs and optimistic writes", () => {

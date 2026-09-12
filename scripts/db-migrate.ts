@@ -2,10 +2,11 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { stderr, stdout } from "node:process";
 import postgres from "postgres";
+import { metadataSnapshotQuery, type ManagedSchema } from "./db-catalog-snapshot";
 import {
-  APP_ROLES, OPERATOR_PLAN, PRIVATE_FUNCTION_GRANTS, RPC_CONTRACTS, SHAGUN_TABLES,
+  APP_ROLES, LEDGER_READ_LIMIT, OPERATOR_PLAN, SHAGUN_TABLES,
   SHARED_TABLES, STORAGE_POLICIES, TABLE_PRIVILEGES, SafeError, assertPreserved,
-  assertStorageState, connectionOptions, connectionTarget, exposedSchemas, migrationPlan,
+  assertStorageState, connectionOptions, connectionTarget, exposedSchemas, functionContracts, migrationPlan,
   parseArguments, readMigrationSources, safeTarget, sanitizedFailure, sha256, tablePrivileges, validateSeed,
   type Fingerprint, type LedgerRow, type Migration, type NamespaceState, type PreservationSnapshot,
 } from "./db-migration-plan";
@@ -17,99 +18,12 @@ import {
 // This CommonJS tsx entry point uses __dirname, not the caller's working directory,
 // for reviewed SQL. The explicitly supplied environment path is cwd-relative.
 type Tx = postgres.TransactionSql;
-type ManagedSchema = "public" | "auth" | "storage";
 let inspectionStage = "connection";
-
-function acl(tx: Tx, expression: string) {
-  // expression is exclusively a checked-in catalog expression below, never input.
-  return tx.unsafe(`(select coalesce(jsonb_agg(jsonb_build_object(
-    'grantor', g.grantor::text, 'grantee', g.grantee::text,
-    'privilege', g.privilege_type, 'grantable', g.is_grantable)
-    order by g.grantor, g.grantee, g.privilege_type, g.is_grantable), '[]'::jsonb)
-    from pg_catalog.aclexplode(${expression}) g)`);
-}
 
 async function metadataSnapshot(tx: Tx, schema: ManagedSchema, newStorage: boolean, newInventory: boolean): Promise<string> {
   inspectionStage = `metadata-${schema}`;
-  // Logical metadata only: no reltuples/pages/statistics, Auth records, function
-  // bodies, role passwords/config blobs or arbitrary settings. Owners/grantees
-  // are OIDs, not login names. The JSON is deterministic and NEVER logged/saved.
-  const [row] = await tx<{ snapshot: string }[]>`
-    select jsonb_build_object(
-      'schema', jsonb_build_object('name', n.nspname, 'owner', n.nspowner::text,
-        'acl', ${acl(tx, "coalesce(n.nspacl, pg_catalog.acldefault('n', n.nspowner))")}),
-      'relations', (select coalesce(jsonb_agg(jsonb_build_object(
-        'name', c.relname, 'kind', c.relkind, 'owner', c.relowner::text,
-        'persistence', c.relpersistence, 'rls', c.relrowsecurity, 'forceRls', c.relforcerowsecurity,
-        'replicaIdentity', c.relreplident, 'partition', c.relispartition,
-        'partitionBound', pg_get_expr(c.relpartbound, c.oid),
-        'options', (select coalesce(jsonb_agg(o order by o collate "C"), '[]'::jsonb) from unnest(c.reloptions) o),
-        'acl', ${acl(tx, "coalesce(c.relacl, pg_catalog.acldefault(case when c.relkind = 'S' then 's'::\"char\" else 'r'::\"char\" end, c.relowner))")},
-        'view', case when c.relkind in ('v', 'm') then pg_get_viewdef(c.oid, false) else null end,
-        'parents', (select coalesce(jsonb_agg(i.inhparent::text order by i.inhseqno), '[]'::jsonb)
-          from pg_inherits i where i.inhrelid = c.oid),
-        'columns', (select coalesce(jsonb_agg(jsonb_build_object(
-          'position', a.attnum, 'name', a.attname, 'type', format_type(a.atttypid, a.atttypmod),
-          'typeOid', a.atttypid::text, 'typeModifier', a.atttypmod, 'collation', a.attcollation::text,
-          'notNull', a.attnotnull, 'identity', a.attidentity, 'generated', a.attgenerated,
-          'storage', a.attstorage, 'compression', a.attcompression, 'inherited', a.attinhcount,
-          'default', pg_get_expr(d.adbin, d.adrelid),
-          'acl', ${acl(tx, "coalesce(a.attacl, '{}'::aclitem[])")}) order by a.attnum), '[]'::jsonb)
-          from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
-          where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped),
-        'constraints', (select coalesce(jsonb_agg(jsonb_build_object(
-          'name', k.conname, 'type', k.contype, 'definition', pg_get_constraintdef(k.oid, false),
-          'validated', k.convalidated, 'deferrable', k.condeferrable, 'deferred', k.condeferred,
-          'local', k.conislocal, 'inheritCount', k.coninhcount, 'noInherit', k.connoinherit)
-          order by k.conname collate "C"), '[]'::jsonb) from pg_constraint k where k.conrelid = c.oid),
-        'indexes', (select coalesce(jsonb_agg(jsonb_build_object(
-          'name', ic.relname, 'owner', ic.relowner::text, 'definition', pg_get_indexdef(i.indexrelid),
-          'valid', i.indisvalid, 'ready', i.indisready, 'live', i.indislive,
-          'clustered', i.indisclustered, 'replicaIdentity', i.indisreplident, 'options', ic.reloptions)
-          order by ic.relname collate "C"), '[]'::jsonb)
-          from pg_index i join pg_class ic on ic.oid = i.indexrelid where i.indrelid = c.oid),
-        'triggers', (select coalesce(jsonb_agg(jsonb_build_object(
-          'name', t.tgname, 'enabled', t.tgenabled, 'internal', t.tgisinternal,
-          'function', t.tgfoid::text, 'definition', pg_get_triggerdef(t.oid, false))
-          order by t.tgname collate "C"), '[]'::jsonb)
-          from pg_trigger t where t.tgrelid = c.oid and not (
-            ${newInventory} and n.nspname = 'auth' and c.relname = 'users' and t.tgisinternal
-            and exists (select 1 from pg_constraint fk where fk.oid = t.tgconstraint
-              and fk.contype = 'f' and fk.conname = 'admin_users_id_fkey'
-              and fk.conrelid = to_regclass('shagun.admin_users') and fk.confrelid = c.oid
-              and t.tgconstrrelid = fk.conrelid))),
-        'policies', (select coalesce(jsonb_agg(jsonb_build_object(
-          'name', p.polname, 'command', p.polcmd, 'permissive', p.polpermissive,
-          'roles', (select jsonb_agg(r::text order by r) from unnest(p.polroles) r),
-          'using', pg_get_expr(p.polqual, p.polrelid), 'check', pg_get_expr(p.polwithcheck, p.polrelid))
-          order by p.polname collate "C"), '[]'::jsonb) from pg_policy p where p.polrelid = c.oid
-          and not (${newStorage} and n.nspname = 'storage' and c.relname = 'objects'
-            and p.polname::text = any(${tx.array([...STORAGE_POLICIES], 25)}::text[])))
-        ) order by c.relname collate "C"), '[]'::jsonb)
-        from pg_class c where c.relnamespace = n.oid and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')),
-      'types', (select coalesce(jsonb_agg(jsonb_build_object(
-        'name', t.typname, 'kind', t.typtype, 'owner', t.typowner::text,
-        'baseType', t.typbasetype::text, 'notNull', t.typnotnull, 'default', t.typdefault,
-        'acl', ${acl(tx, "coalesce(t.typacl, pg_catalog.acldefault('T', t.typowner))")},
-        'labels', (select jsonb_agg(e.enumlabel order by e.enumsortorder) from pg_enum e where e.enumtypid = t.oid))
-        order by t.typname collate "C"), '[]'::jsonb) from pg_type t where t.typnamespace = n.oid),
-      'routines', (select coalesce(jsonb_agg(jsonb_build_object(
-        'name', p.proname, 'arguments', pg_get_function_identity_arguments(p.oid),
-        'result', pg_get_function_result(p.oid), 'kind', p.prokind, 'owner', p.proowner::text,
-        'definer', p.prosecdef, 'volatility', p.provolatile, 'leakproof', p.proleakproof,
-        'strict', p.proisstrict, 'acl', ${acl(tx, "coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))")})
-        order by p.proname collate "C", p.oid), '[]'::jsonb) from pg_proc p where p.pronamespace = n.oid),
-      'defaultPrivileges', (select coalesce(jsonb_agg(jsonb_build_object(
-        'role', d.defaclrole::text, 'namespace', d.defaclnamespace::text, 'type', d.defaclobjtype,
-        'acl', ${acl(tx, "d.defaclacl")}) order by d.defaclrole, d.defaclnamespace, d.defaclobjtype), '[]'::jsonb)
-        from pg_default_acl d where d.defaclnamespace in (0, n.oid)),
-      'roleMemberships', (select coalesce(jsonb_agg(to_jsonb(m) order by m.roleid, m.member, m.grantor), '[]'::jsonb) from pg_auth_members m),
-      'roleCapabilities', (select coalesce(jsonb_agg(jsonb_build_object(
-        'id', r.oid::text, 'superuser', r.rolsuper, 'inherit', r.rolinherit, 'bypassRls', r.rolbypassrls)
-        order by r.oid), '[]'::jsonb) from pg_roles r)
-    )::text as snapshot
-    from pg_namespace n where n.nspname = ${schema}
-  `;
+  const query = metadataSnapshotQuery(schema, newStorage, newInventory);
+  const [row] = await tx.unsafe<{ snapshot: string }[]>(query.text, query.parameters);
   if (!row) throw new SafeError("MANAGED_DEPENDENCIES");
   return row.snapshot;
 }
@@ -208,7 +122,7 @@ async function readLedger(tx: Tx): Promise<LedgerRow[]> {
   // ANY-privilege lists above intentionally detect ANY forbidden access.
   if (!shape?.valid) throw new SafeError("LEDGER_INVALID");
   const rows = await tx<LedgerRow[]>`
-    select version, checksum from shagun_private.schema_migrations order by version collate "C" limit 5
+    select version, checksum from shagun_private.schema_migrations order by version collate "C" limit ${LEDGER_READ_LIMIT}
   `;
   return rows.map((row) => ({ version: row.version, checksum: row.checksum }));
 }
@@ -338,8 +252,7 @@ async function preflight(tx: Tx, sharedGuard: boolean) {
 
 async function verifyOwnObjects(tx: Tx, versions: readonly string[]) {
   const withUploads = versions.includes("0004");
-  const expectedRpcs = RPC_CONTRACTS.filter((rpc) => rpc.name === "sitemap_entries" ? versions.includes("0003")
-    : ["begin_media_upload", "finalize_media_upload"].includes(rpc.name) ? withUploads : true);
+  const { rpcs: expectedRpcs, privateGrants: expectedPrivateGrants } = functionContracts(versions);
   const tables = await tx<{ name: string; safe: boolean }[]>`
     select c.relname as name, c.relkind = 'r' and c.relrowsecurity and not c.relforcerowsecurity
       and c.relowner = (select oid from pg_roles where rolname = current_user)
@@ -392,15 +305,16 @@ async function verifyOwnObjects(tx: Tx, versions: readonly string[]) {
     order by n.nspname collate "C", p.proname collate "C", p.oid
   `;
   if (routines.filter((routine) => routine.schema === "shagun").length !== expectedRpcs.length
-    || routines.filter((routine) => routine.schema === "shagun_private").length !== Object.keys(PRIVATE_FUNCTION_GRANTS).length) throw new SafeError("POSTCONDITIONS");
+    || routines.filter((routine) => routine.schema === "shagun_private").length !== Object.keys(expectedPrivateGrants).length) throw new SafeError("POSTCONDITIONS");
   const seen = new Set<string>();
   for (const routine of routines) {
     const key = `${routine.schema}.${routine.name}`;
     if (!routine.safe || seen.has(key)) throw new SafeError("POSTCONDITIONS");
     seen.add(key);
     const contract = expectedRpcs.find((rpc) => rpc.name === routine.name && rpc.args === routine.args);
-    const roles = routine.schema === "shagun" ? contract?.roles : PRIVATE_FUNCTION_GRANTS[routine.name];
+    const roles = routine.schema === "shagun" ? contract?.roles : expectedPrivateGrants[routine.name];
     const definer = routine.schema === "shagun" ? contract?.definer : roles?.length === 0;
+    if (key === "shagun_private.city_preview_inventory" && routine.args !== "uuid") throw new SafeError("POSTCONDITIONS");
     if (!roles || routine.definer !== definer || APP_ROLES.some((role) => routine[role] !== roles.includes(role))) throw new SafeError("POSTCONDITIONS");
   }
   const counts: Record<string, string> = {};

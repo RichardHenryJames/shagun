@@ -8,7 +8,11 @@ import { parse } from "dotenv";
 // directory. SQL checks are a deliberately narrow review gate, not a SQL sandbox.
 export const MIGRATION_FILES = [
   "0001_inventory.sql", "0002_storage.sql", "0003_sitemap.sql", "0004_media_uploads.sql",
+  "0005_city_preview.sql",
 ] as const;
+// Read one beyond the complete known history so an extra/unknown row cannot
+// hide behind the SELECT limit and masquerade as a valid completed ledger.
+export const LEDGER_READ_LIMIT = MIGRATION_FILES.length + 1;
 export type MigrationFile = typeof MIGRATION_FILES[number];
 export const SHARED_TABLES = ["Category", "Product", "Order", "ContactMessage"] as const;
 export const SHAGUN_TABLES = [
@@ -33,7 +37,7 @@ const SAFE_MESSAGES = {
   TRANSACTION_POOLER: "Port 6543 is a transaction pooler and is refused. Select the project's direct or session-pooler endpoint on port 5432; do not merely rewrite a URL's port.",
   PROJECT_MISMATCH: "The hostname/login project reference does not match --expected-project-ref. No connection was attempted.",
   TLS_CONFIGURATION: "TLS verification must remain enabled. Configure trusted Node/system CA certificates in the launching process; no insecure fallback is provided.",
-  SQL_FILES: "Exactly the four checked-in migration SQL filenames are required. Missing, duplicate, renamed or extra SQL migrations need a reviewed runner update.",
+  SQL_FILES: "Exactly the five checked-in migration SQL filenames are required. Missing, duplicate, renamed or extra SQL migrations need a reviewed runner update.",
   SQL_READ: "The checked-in migration or seed sources could not be read. No database connection was attempted.",
   SQL_TRANSACTION: "Migration SQL contains transaction control. Only the runner may begin, commit or roll back the operation.",
   SQL_REVIEW: "SQL is outside the reviewed Shagun-only statement surface. Review the source and runner together; there is no force or skip-validation flag.",
@@ -41,7 +45,7 @@ const SAFE_MESSAGES = {
   NAMESPACE_STATE: "Shagun namespaces are partially present or inconsistent. Automatic adoption, repair and reset are refused.",
   LEDGER_REQUIRED: "Existing Shagun namespaces require their private migration ledger. Legacy tables cannot be adopted automatically.",
   LEDGER_INVALID: "The private ledger structure, ownership, privileges or rows are invalid. No automatic repair or adoption is permitted.",
-  LEDGER_PREFIX: "Ledger versions must be a nonempty, exact ordered prefix of the four known migrations, with no gaps, duplicates or unknown versions.",
+  LEDGER_PREFIX: "Ledger versions must be a nonempty, exact ordered prefix of the five known migrations, with no gaps, duplicates or unknown versions.",
   LEDGER_CHECKSUM: "A recorded migration checksum differs from the checked-in SQL bytes. Do not edit history or overwrite the ledger to force migration.",
   SHARED_TABLES: "Shared-source mode requires all four real public Bihari tables: Category, Product, Order and ContactMessage, readable without RLS filtering.",
   MANAGED_DEPENDENCIES: "PostgreSQL 15+, the managed Auth/Storage relations and application roles, and readable count/metadata surfaces are required.",
@@ -359,6 +363,11 @@ const FUNCTION_REVIEW: Readonly<Record<MigrationFile, readonly string[]>> = {
     "shagun.begin_media_upload(p_key text) returns void language plpgsql security definer",
     "shagun.finalize_media_upload(p_data jsonb) returns jsonb language plpgsql security invoker",
   ],
+  "0005_city_preview.sql": [
+    "shagun_private.city_preview_inventory(p_city uuid) returns setof shagun.venues language plpgsql stable security invoker",
+    "shagun.preview_city_venues(p_city uuid, p_query text default '', p_capacity integer default null, p_budget numeric default null, p_price_type text default null, p_facilities text[] default '{}', p_type text default null, p_sort text default 'recent', p_page integer default 1, p_limit integer default 12) returns jsonb language plpgsql stable security invoker",
+    "shagun.preview_city_facets(p_city uuid) returns jsonb language plpgsql stable security invoker",
+  ],
 };
 const OWN_FUNCTIONS = new Set(Object.values(FUNCTION_REVIEW).flat().map((header) => header.slice(0, header.indexOf("("))));
 
@@ -459,6 +468,14 @@ const STATIC_REVIEW: Readonly<Record<Exclude<MigrationFile, "0002_storage.sql">,
     revoke all on function shagun.begin_media_upload(text), shagun.finalize_media_upload(jsonb) from public, anon, authenticated, service_role;
     grant execute on function shagun.begin_media_upload(text), shagun.finalize_media_upload(jsonb) to authenticated;
   `,
+  "0005_city_preview.sql": `
+    revoke all on function shagun_private.city_preview_inventory(uuid),
+      shagun.preview_city_venues(uuid, text, integer, numeric, text, text[], text, text, integer, integer),
+      shagun.preview_city_facets(uuid) from public, anon, authenticated, service_role;
+    grant execute on function shagun_private.city_preview_inventory(uuid),
+      shagun.preview_city_venues(uuid, text, integer, numeric, text, text[], text, text, integer, integer),
+      shagun.preview_city_facets(uuid) to authenticated;
+  `,
 };
 const STATIC_SIGNATURES = new Map(Object.entries(STATIC_REVIEW).map(([filename, sql]) =>
   [filename, new Set(sqlStatements(sql).map((statement) => reviewSignature(statement.text)))]));
@@ -466,7 +483,7 @@ const STATIC_SIGNATURES = new Map(Object.entries(STATIC_REVIEW).map(([filename, 
 type ReviewedStatement =
   | { kind: "static" }
   | { kind: "table"; table: ShagunTable; tokens: SqlToken[] }
-  | { kind: "function"; language: "sql" | "plpgsql"; tokens: SqlToken[] };
+  | { kind: "function"; filename: MigrationFile; name: string; language: "sql" | "plpgsql"; tokens: SqlToken[] };
 
 function reviewedSchemaAcl(values: readonly string[]): boolean {
   const grant = values.slice(0, 4).join(" ") === "grant usage on schema";
@@ -492,7 +509,8 @@ function reviewedStatement(filename: MigrationFile, statement: SqlStatement): Re
     const header = reviewSignature(statement.text.slice(0, body.start));
     const reviewed = FUNCTION_REVIEW[filename].find((candidate) =>
       reviewSignature(`create function ${candidate} set search_path = '' as`) === header);
-    if (reviewed) return { kind: "function", language: reviewed.includes(" language sql ") ? "sql" : "plpgsql", tokens: sqlTokens(body.source) };
+    if (reviewed) return { kind: "function", filename, name: reviewed.slice(0, reviewed.indexOf("(")),
+      language: reviewed.includes(" language sql ") ? "sql" : "plpgsql", tokens: sqlTokens(body.source) };
   }
   if (filename === "0001_inventory.sql" && values.slice(0, 4).join(" ") === "create table shagun ."
     && SHAGUN_TABLES.includes(values[4] as ShagunTable) && values[5] === "(") {
@@ -609,9 +627,14 @@ function assertOwnCode(model: Exclude<ReviewedStatement, { kind: "static" }>): v
       const next = index + 1;
       const authReference = reference && model.kind === "table" && model.table === "admin_users"
         && values.slice(next, next + 6).join(" ") === "auth . users ( id )";
+      // Only 0005's two preview RPCs may read this exact set-returning helper
+      // with their required city argument. This is not a schema/function wildcard.
+      const previewRead = read && model.kind === "function" && model.filename === "0005_city_preview.sql"
+        && ["shagun.preview_city_venues", "shagun.preview_city_facets"].includes(model.name)
+        && values.slice(next, next + 6).join(" ") === "shagun_private . city_preview_inventory ( p_city )";
       const localRead = read && (at(next) === "(" || (LOCAL_RELATIONS.has(at(next)) && at(next + 1) !== ".")
         || (CATALOG_CALLS.has(at(next)) && at(next + 1) === "("));
-      if (!ownTable(next) && !authReference && !localRead) throw new SafeError("SQL_REVIEW");
+      if (!ownTable(next) && !authReference && !localRead && !previewRead) throw new SafeError("SQL_REVIEW");
     }
     if (value === "into" && at(index - 1) !== "insert"
       && !(model.kind === "function" && model.language === "plpgsql" && INTO_VARIABLES.has(at(index + 1)) && at(index + 2) !== ".")) throw new SafeError("SQL_REVIEW");
@@ -821,12 +844,29 @@ export const RPC_CONTRACTS: readonly { name: string; args: string; roles: readon
   { name: "sitemap_entries", args: "integer, integer", roles: APP_ROLES, definer: false },
   { name: "begin_media_upload", args: "text", roles: ["authenticated"], definer: true },
   { name: "finalize_media_upload", args: "jsonb", roles: ["authenticated"], definer: false },
+  { name: "preview_city_venues", args: "uuid, text, integer, numeric, text, text[], text, text, integer, integer", roles: ["authenticated"], definer: false },
+  { name: "preview_city_facets", args: "uuid", roles: ["authenticated"], definer: false },
 ];
 export const PRIVATE_FUNCTION_GRANTS: Readonly<Record<string, readonly AppRole[]>> = {
   valid_metadata: APP_ROLES, check_page: APP_ROLES, prefix_query: APP_ROLES, needs_review: APP_ROLES, city_summary: APP_ROLES,
   require_admin: ["authenticated", "service_role"], iso_timestamp: ["authenticated", "service_role"],
   enforce_city: [], enforce_venue: [], enforce_research: [], research_changed: [], facilities_changing: [], media_changing: [], media_changed: [],
+  city_preview_inventory: ["authenticated"],
 };
+
+// Pre-upgrade inspection must accept an intact 0001-0004 installation without
+// demanding (or tolerating) unrecorded 0005 functions. Counts and ACL checks use
+// this same versioned contract before applying and after recording the ledger.
+export function functionContracts(versions: readonly string[]) {
+  return {
+    rpcs: RPC_CONTRACTS.filter((rpc) => rpc.name === "sitemap_entries" ? versions.includes("0003")
+      : ["begin_media_upload", "finalize_media_upload"].includes(rpc.name) ? versions.includes("0004")
+      : ["preview_city_venues", "preview_city_facets"].includes(rpc.name) ? versions.includes("0005")
+      : versions.includes("0001")),
+    privateGrants: Object.fromEntries(Object.entries(PRIVATE_FUNCTION_GRANTS)
+      .filter(([name]) => versions.includes(name === "city_preview_inventory" ? "0005" : "0001"))),
+  };
+}
 
 export const OPERATOR_PLAN = [
   "Inspection is read-only, not deployment approval, a backup, or real-service certification. Arrange a verified shared-project backup/recovery plan first.",
