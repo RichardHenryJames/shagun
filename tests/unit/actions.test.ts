@@ -21,7 +21,7 @@ import { createCatalogCityAction, deleteCityAction, saveCityAction } from "@/lib
 import { getCatalogCity, getCatalogStates, searchCityCatalog } from "@/lib/city-catalog";
 import { cleanupStorageAction } from "@/lib/actions/maintenance";
 import { actionError } from "@/lib/actions/shared";
-import { deleteVenueAction, saveVenueAction } from "@/lib/actions/venues";
+import { bulkPublishVenuesAction, deleteVenueAction, saveVenueAction } from "@/lib/actions/venues";
 import { invalidateInventory } from "@/lib/cache";
 
 const ADMIN_ID = "30000000-0000-4000-8000-000000000003";
@@ -266,6 +266,143 @@ describe("selection-only city creation", () => {
     expect(result.fieldErrors?.slug).toBeUndefined();
     expect(JSON.stringify(result)).not.toContain(PRIVATE_DETAIL);
     expect(session.client.rpc).toHaveBeenCalledOnce();
+  });
+});
+
+describe("explicit bulk venue publishing", () => {
+  const target = { id: VENUE_ID, expected_updated_at: VERSION };
+  const saved = {
+    id: VENUE_ID, updated_at: VERSION, name: "Test Venue", slug: "test-venue", city_id: CITY_ID,
+    city: CITY, status: "draft", venue_type: "banquet_hall", verification_status: "unverified", verified_at: null,
+    address: "Recorded venue address", source_notes: "Not trusted from public document", facilities: ["parking"],
+    description: "Recorded facts", phone: "+12025550123", capacity_min: 50, capacity_max: 100,
+    price_min: 1000, price_max: 2000, price_type: "per_event", latitude: 23.1, longitude: 85.1,
+  };
+  function inventory(changes: Record<string, unknown> = {}, sourceNotes = "Private source reference") {
+    const research = query({ data: { source_notes: sourceNotes }, error: null });
+    const writes = vi.fn().mockReturnValue(query({ data: VENUE_ID, error: null }));
+    session.client.from.mockImplementation((table) => {
+      if (table === "admin_users") return session.adminQuery;
+      if (table === "venue_research") return research;
+      throw new Error("Unexpected bulk table");
+    });
+    session.client.rpc.mockImplementation((name, args) => name === "venue_document"
+      ? query({ data: { ...saved, ...changes, id: args.p_id }, error: null }) : writes(name, args));
+    return { writes, research };
+  }
+
+  it.each(["review", "publish"])("reauthorizes %s before any inventory access", async (mode) => {
+    session.client.auth.getUser.mockResolvedValue({ data: { user: null }, error: null });
+    const result = await bulkPublishVenuesAction({ mode, targets: [target], reviewed: true });
+    expect(result.error).toBeDefined();
+    expect(session.client.from).not.toHaveBeenCalled();
+    expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([null, { ...ADMIN, is_active: false }, { ...ADMIN, id: CITY_ID }])("denies non-admin membership %j", async (admin) => {
+    session.adminQuery.maybeSingle.mockResolvedValue({ data: admin, error: null });
+    expect((await bulkPublishVenuesAction({ mode: "publish", reviewed: true, targets: [target] })).error).toBeDefined();
+    expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { mode: "publish", targets: [target] }, { mode: "publish", reviewed: "true", targets: [target] },
+    { mode: "publish", reviewed: false, targets: [target] }, { mode: "review", targets: [] },
+    { mode: "review", targets: [target, target] }, { mode: "review", targets: [{ ...target, expected_updated_at: "yesterday" }] },
+    { mode: "review", targets: Array.from({ length: 26 }, (_, index) => ({ ...target, id: `20000000-0000-4000-8000-${String(index).padStart(12, "0")}` })) },
+    { mode: "publish", reviewed: true, targets: [target], status: "published" },
+  ])("refuses invalid or unconfirmed selections without reads or writes: %j", async (input) => {
+    expect((await bulkPublishVenuesAction(input)).error).toBeDefined();
+    expect(session.client.rpc).not.toHaveBeenCalled();
+    expect(mocks.rateRpc).not.toHaveBeenCalled();
+  });
+
+  it("prepares saved facts and private sources without publishing or inventing verification", async () => {
+    const { writes } = inventory();
+    const result = await bulkPublishVenuesAction({ mode: "review", targets: [target] });
+    expect(result).toMatchObject({ phase: "review", rows: [{ ...target, outcome: "ready", cityActive: false,
+      details: { source_notes: "Private source reference", verification_status: "unverified", verified_at: null } }] });
+    expect(writes).not.toHaveBeenCalled();
+    expect(mocks.revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it("publishes using the exact reviewed version and existing facts without changing the city or check date", async () => {
+    const { writes } = inventory();
+    const result = await bulkPublishVenuesAction({ mode: "publish", reviewed: true, targets: [target] });
+    expect(result.rows[0]).toMatchObject({ outcome: "published", message: expect.stringContaining("hidden publicly") });
+    expect(writes).toHaveBeenCalledExactlyOnceWith("save_venue", { p_id: VENUE_ID, p_expected: VERSION,
+      p_data: expect.objectContaining({ name: saved.name, slug: saved.slug, city_id: CITY_ID, address: saved.address,
+        phone: saved.phone, description: saved.description, capacity_min: 50, capacity_max: 100,
+        price_min: 1000, price_max: 2000, latitude: 23.1, longitude: 85.1, facilities: ["parking"],
+        source_notes: "Private source reference", status: "published", reviewed: true, verification_status: "unverified", verified_at: null }) });
+    expect(mocks.revalidateTag).toHaveBeenCalled();
+  });
+
+  it.each(["published", "archived"])("leaves %s records unchanged", async (status) => {
+    const { writes } = inventory({ status });
+    expect((await bulkPublishVenuesAction({ mode: "publish", reviewed: true, targets: [target] })).rows[0].outcome).toBe("skipped");
+    expect(writes).not.toHaveBeenCalled();
+  });
+
+  it.each(["address", "source_notes", "capacity_max", "verified_at"])("reports incomplete or invalid %s without saving", async (field) => {
+    const { writes } = inventory(field === "address" ? { address: null } : field === "capacity_max" ? { capacity_max: 1 }
+      : field === "verified_at" ? { verification_status: "verified", verified_at: null } : {}, field === "source_notes" ? "" : "Private source reference");
+    expect((await bulkPublishVenuesAction({ mode: "publish", reviewed: true, targets: [target] })).rows[0].outcome).toBe("blocked");
+    expect(writes).not.toHaveBeenCalled();
+  });
+
+  it("does not adopt a newer version after review", async () => {
+    const { writes } = inventory({ updated_at: "2026-09-08T09:10:11.123457+05:30" });
+    expect((await bulkPublishVenuesAction({ mode: "publish", reviewed: true, targets: [target] })).rows[0].outcome).toBe("conflict");
+    expect(writes).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { code: "P0001", message: "conflict" }, { code: "42501", message: PRIVATE_DETAIL }, { code: "", message: PRIVATE_DETAIL },
+  ])("retains exact partial outcomes on save failure %j", async (failure) => {
+    const { writes } = inventory();
+    writes.mockReturnValueOnce(query({ data: VENUE_ID, error: null }))
+      .mockReturnValueOnce(query({ data: null, error: failure }));
+    const targets = [target, { ...target, id: ROOT }, { ...target, id: JOB_ID }];
+    const result = await bulkPublishVenuesAction({ mode: "publish", reviewed: true, targets });
+    expect(result.rows[0].outcome).toBe("published");
+    expect(result.rows[1].outcome).toBe(failure.code === "P0001" ? "conflict" : failure.code === "42501" ? "blocked" : "unconfirmed");
+    if (failure.code !== "P0001") {
+      expect(result.rows[2].outcome).toBe("not_attempted");
+      expect(writes).toHaveBeenCalledTimes(2);
+    }
+    expect(JSON.stringify(result)).not.toContain(PRIVATE_DETAIL);
+    expect(mocks.revalidateTag).toHaveBeenCalled();
+  });
+
+  it("fails closed before inventory work when rate limited", async () => {
+    mocks.rateRpc.mockResolvedValue({ data: false, error: null });
+    expect((await bulkPublishVenuesAction({ mode: "publish", reviewed: true, targets: [target] })).error).toBeDefined();
+    expect(session.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("reports every selected row and makes no saves when a preflight read fails", async () => {
+    const { writes } = inventory();
+    session.client.rpc.mockImplementation((name, args) => name === "venue_document"
+      ? query(args.p_id === ROOT ? { data: null, error: { message: PRIVATE_DETAIL } } : { data: saved, error: null }) : writes(name, args));
+    const result = await bulkPublishVenuesAction({ mode: "publish", reviewed: true,
+      targets: [target, { ...target, id: ROOT }, { ...target, id: JOB_ID }],
+    });
+    expect(result.rows.map((entry) => entry.outcome)).toEqual(["not_attempted", "not_attempted", "not_attempted"]);
+    expect(result.error).toContain("No venues were published");
+    expect(writes).not.toHaveBeenCalled();
+    expect(mocks.revalidateTag).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(PRIVATE_DETAIL);
+  });
+
+  it("publishes all 25 selected saved versions within the page limit", async () => {
+    const { writes } = inventory();
+    writes.mockImplementation((_name, args) => query({ data: args.p_id, error: null }));
+    const targets = Array.from({ length: 25 }, (_, index) => ({ ...target, id: `20000000-0000-4000-8000-${String(index).padStart(12, "0")}` }));
+    const result = await bulkPublishVenuesAction({ mode: "publish", reviewed: true, targets });
+    expect(result.rows.map(({ id, outcome }) => ({ id, outcome }))).toEqual(targets.map(({ id }) => ({ id, outcome: "published" })));
+    expect(writes).toHaveBeenCalledTimes(25);
+    expect(writes.mock.calls.every((call) => call[1].p_expected === VERSION)).toBe(true);
   });
 });
 

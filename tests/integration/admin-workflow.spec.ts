@@ -115,8 +115,103 @@ async function exerciseGallery(page: Page, owned: OwnedInventory): Promise<void>
   await expect.poll(() => page.locator("body").evaluate((element) => element.style.overflow)).toBe(overflow);
 }
 
+async function exerciseBulkPublishing(page: Page, visitor: Page, observer: LocalClient, owned: OwnedInventory, width: number, allowed: Set<string>) {
+  const cityList = `${CITY_WORKSPACE}?${new URLSearchParams({ status: "draft", q: owned.token })}`;
+  const allList = `/admin/venues?${new URLSearchParams({ status: "draft", q: owned.token })}`;
+  const dialog = page.getByRole("dialog", { name: /Review selected venues|Publication results/ });
+  const opener = page.getByRole("button", { name: /^Review & publish/ });
+  const approval = dialog.getByRole("checkbox", { name: /^I have reviewed the selected venues/ });
+  const selectPage = page.getByRole("checkbox", { name: "Select all publishable statuses on this page", exact: true });
+  const table = page.getByRole("region", { name: "Venue inventory", exact: true });
+  await page.goto(cityList);
+  await expect(opener).toBeDisabled();
+  const paths = await table.locator("tbody .a-table-name").evaluateAll((links) => links.map((link) => new URL((link as HTMLAnchorElement).href).pathname));
+  expect(paths.length).toBeGreaterThanOrEqual(2);
+  expect(paths.length).toBeLessThanOrEqual(25);
+  const ids = paths.map((path) => savedId(path.split("/").at(-1) ?? null));
+  ids.forEach((id) => allowed.add(id));
+  await table.locator("tbody input[type=checkbox]").first().check();
+  await opener.click();
+  await expect(dialog.locator("article")).toHaveCount(1);
+  await expect(approval).not.toBeChecked();
+  await expect(dialog.getByRole("button", { name: "Publish 1 venue", exact: true })).toBeDisabled();
+  await approval.check();
+  await expect(dialog.getByRole("button", { name: "Publish 1 venue", exact: true })).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+  expect(checked(await observer.from("venues").select("id").eq("city_id", owned.cityId!).eq("status", "published"), "Cancel publishes nothing")).toEqual([]);
+
+  await page.goto(paths[0]);
+  await field(page, "Full address").fill("");
+  await saveExisting(page, "venue");
+  await page.goto(cityList);
+  await selectPage.check();
+  await opener.click();
+  await expect(dialog.getByText(`${ids.length - 1} ready; 1 need attention.`, { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Add a full address and private source notes in the venue editor.", { exact: true })).toBeVisible();
+  await expect(approval).not.toBeChecked();
+  await approval.check();
+  await dialog.getByRole("checkbox", { name: /^Include / }).first().uncheck();
+  await expect(approval).not.toBeChecked();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(checked(await observer.from("venues").select("id").eq("city_id", owned.cityId!).eq("status", "published"), "Review publishes nothing")).toEqual([]);
+
+  await page.goto(paths[0]);
+  await field(page, "Full address").fill(owned.address);
+  await saveExisting(page, "venue");
+  await page.goto(allList);
+  await selectPage.check();
+  await opener.click();
+  await expect(dialog.getByText(`${ids.length} ready; 0 need attention.`, { exact: true })).toBeVisible();
+  for (const viewport of width === 768 ? [320, 375, 390, 414, 768, 1440] : [width]) {
+    await page.setViewportSize({ width: viewport, height: viewport >= 768 ? 1000 : 844 });
+    await auditLayout(page);
+  }
+  await page.setViewportSize({ width, height: width >= 768 ? 1000 : 844 });
+  for (const key of ["Shift+Tab", "Tab", "Tab"]) {
+    await page.keyboard.press(key);
+    await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+  expect(await dialog.locator(".a-bulk-source").count()).toBe(ids.length);
+  const concurrent = await page.context().newPage();
+  try {
+    await concurrent.goto(paths[0]);
+    await field(concurrent, "Private source notes").fill(`${owned.sourceNotes}\nLocal bulk-publication concurrent correction.`);
+    await saveExisting(concurrent, "venue");
+  } finally { await concurrent.close(); }
+  const before = checked(await observer.from("venues").select("*").in("id", ids).order("id"), "Read selected records before publication")!;
+  const sourcesBefore = checked(await observer.from("venue_research").select("venue_id,source_notes").in("venue_id", ids).order("venue_id"), "Read selected private sources")!;
+  const facilitiesBefore = checked(await observer.from("venue_facilities").select("venue_id,facility_code").in("venue_id", ids).order("venue_id").order("facility_code"), "Read selected facilities")!;
+  await approval.check();
+  await dialog.getByRole("button", { name: `Publish ${ids.length} venues`, exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Publication results", exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(dialog.getByText(`${ids.length - 1} published; 1 unchanged or unconfirmed.`, { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Changed since selection", { exact: true })).toBeVisible();
+  const after = checked(await observer.from("venues").select("*").in("id", ids).order("id"), "Observe bulk publication results")!;
+  const facts = (venue: object) => Object.fromEntries(Object.entries(venue).filter(([key]) => !["status", "published_at", "updated_at"].includes(key)));
+  expect(JSON.stringify(after.map(facts)) === JSON.stringify(before.map(facts)), "Bulk publication must preserve every saved venue fact").toBe(true);
+  expect(after.filter((venue) => venue.status === "published")).toHaveLength(ids.length - 1);
+  expect(after.find((venue) => venue.id === ids[0])).toEqual(before.find((venue) => venue.id === ids[0]));
+  const sourcesAfter = checked(await observer.from("venue_research").select("venue_id,source_notes,reviewed_at,reviewed_by").in("venue_id", ids).order("venue_id"), "Observe actual review attribution")!;
+  expect(JSON.stringify(sourcesAfter.map(({ venue_id, source_notes }) => ({ venue_id, source_notes }))) === JSON.stringify(sourcesBefore), "Private notes must remain unchanged").toBe(true);
+  expect(sourcesAfter.filter((entry) => entry.venue_id !== ids[0]).every((entry) => entry.reviewed_at && entry.reviewed_by)).toBe(true);
+  expect(checked(await observer.from("venue_facilities").select("venue_id,facility_code").in("venue_id", ids).order("venue_id").order("facility_code"), "Observe unchanged facilities")).toEqual(facilitiesBefore);
+  expect(checked(await observer.from("cities").select("status").eq("id", owned.cityId!).single(), "Bulk publication never activates a city")?.status).toBe("draft");
+  await visitPublic(visitor, `${CITY_PATH}/vivah-bhawan/${after.find((venue) => venue.status === "published")!.slug}`, 404, publicSafety(integrationEnvironment(width), owned));
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(opener).toBeDisabled();
+  console.info(`Integration bulk publishing: ${ids.length} selected; one real concurrent conflict; facts, sources and verification preserved; city unchanged.`);
+  for (const venue of after.filter((entry) => entry.status === "published")) {
+    await page.goto(`/admin/venues/${venue.id}`);
+    await field(page, "Publication status").selectOption("draft");
+    await saveExisting(page, "venue");
+  }
+}
+
 async function exerciseExcelImport(page: Page, visitor: Page, ordinary: Page, observer: LocalClient, owned: OwnedInventory, width: number) {
-  const count = width === 390 ? 1000 : 2;
+  const count = width === 390 ? 1000 : width === 768 ? 25 : 2;
+  const bulkTargets = new Set<string>();
   const widths = width === 390 ? [320, 375, 390, 414, 768, 1024, 1440, 1920] : [width];
   const names = Array.from({ length: count }, (_, index) => `Synthetic Local Excel ${String(index).padStart(3, "0")} ${owned.token}`);
   const slugs = names.map((name) => name.toLowerCase().replaceAll(" ", "-"));
@@ -267,10 +362,12 @@ async function exerciseExcelImport(page: Page, visitor: Page, ordinary: Page, ob
     const researchAfterRetry = checked(await observer.from("venue_research").select("source_notes,updated_at").eq("venue_id", first.id).single(), "Observe preserved UI correction");
     expect(JSON.stringify(researchAfterRetry) === JSON.stringify(researchBeforeRetry), "Retry must preserve the exact saved note and research timestamp").toBe(true);
     console.info(`Integration Excel: ${count} drafts; all fields; retry preserves edits; empty/one/many/results layouts at ${widths.join(",")}; no publication.`);
+    await exerciseBulkPublishing(page, visitor, observer, owned, width, bulkTargets);
   } finally {
     const saved = checked(await observer.from("venues").select("id,city_id,name,slug,status,description").eq("city_id", owned.cityId!), "Inspect exact run-owned workbook drafts for UI cleanup");
     for (const venue of saved ?? []) {
-      if (venue.city_id !== owned.cityId || venue.name !== expected.get(venue.slug) || venue.description !== owned.venueDescription || venue.status !== "draft") {
+      if (venue.city_id !== owned.cityId || venue.name !== expected.get(venue.slug) || venue.description !== owned.venueDescription
+        || (venue.status !== "draft" && !(venue.status === "published" && bulkTargets.has(venue.id)))) {
         throw new Error("Workbook draft identity changed; refusing cleanup.");
       }
     }
@@ -281,6 +378,10 @@ async function exerciseExcelImport(page: Page, visitor: Page, ordinary: Page, ob
         for (let index = worker; index < (saved?.length ?? 0); index += cleanupPages.length) {
           const venue = saved![index];
           await cleanupPage.goto(`/admin/venues/${venue.id}`);
+          if (venue.status === "published") {
+            await field(cleanupPage, "Publication status").selectOption("draft");
+            await saveExisting(cleanupPage, "venue");
+          }
           await deleteFromUI(cleanupPage, "venue", venue.id, venue.name);
         }
       }));

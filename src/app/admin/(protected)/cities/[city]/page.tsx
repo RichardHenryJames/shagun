@@ -12,9 +12,10 @@ import { Pagination } from "@/components/admin/pagination";
 import { ResearchImport } from "@/components/admin/research-import";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState, Notice, PageHeader, StatsRow } from "@/components/admin/ui";
-import { VenueTable } from "@/components/admin/venue-table";
+import { BulkPublishVenues } from "@/components/admin/bulk-publish-venues";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 export const metadata: Metadata = { title: "City workspace" };
 
 export default async function CityWorkspacePage({ params, searchParams }: { params: Promise<{ city: string }>; searchParams: Promise<SearchParams> }) {
@@ -49,7 +50,8 @@ export default async function CityWorkspacePage({ params, searchParams }: { para
       <section className="a-panel" aria-labelledby="workspace-venues-title">
         <h2 className="a-section-title" id="workspace-venues-title">Venue inventory</h2>
         <ListControls path={workspace} q={q} status={status} />
-        {result.items.length ? <VenueTable venues={result.items} showCity={false} /> : (
+        <BulkPublishVenues key={JSON.stringify([city.id, q, status, page])} venues={result.items} showCity={false} />
+        {!result.items.length && (
           <EmptyState title={q || status ? "No matching venues on this page" : page > 1 ? "No venues on this page" : "No venues recorded in this city"}
             action={q || status || page > 1 ? <Link href={page > 1 ? listHref(workspace, { q, status }) : workspace} prefetch={false} className="a-button">{page > 1 ? "Return to first page" : "Clear filters"}</Link> : <Link href={newVenue} prefetch={false} className="a-button a-button--primary">Add the first venue</Link>}>
             {q || status ? "Try a different name or locality, or clear the publication filter." : page > 1 ? "Inventory may have changed since this page was opened." : "The add-venue form will already be associated with this city. Save a draft, then add photos and review it."}

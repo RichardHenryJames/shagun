@@ -1,21 +1,26 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { formatDate, formatNumber, isStale, phoneHref } from "@/lib/format";
 import { VENUE_TYPE_LABELS, type PublicVenue } from "@/lib/types";
 import { StatusBadge } from "@/components/admin/status-badge";
 
-export function VenueTable({ venues, showCity = true, recent = false }: { venues: PublicVenue[]; showCity?: boolean; recent?: boolean }) {
+export function VenueTable({ venues, showCity = true, recent = false, selection, selectionHeader }: {
+  venues: PublicVenue[]; showCity?: boolean; recent?: boolean;
+  selection?: (venue: PublicVenue) => ReactNode; selectionHeader?: ReactNode;
+}) {
   return (
     <div className="a-min-w-0">
       <p className="a-table-hint">Scroll the table horizontally for contact, verification and actions.</p>
       <div className="a-table-wrap" tabIndex={0} role="region" aria-label={recent ? "Recently added venues" : "Venue inventory"}>
         <table className="a-table a-venue-table">
           <caption className="a-sr-only">Saved venues. Publication and verification are separate statuses.</caption>
-          <thead><tr><th scope="col">Venue</th>{showCity && <th scope="col">City</th>}<th scope="col">Publication</th><th scope="col">Phone</th><th scope="col" className="a-numeric">Photos</th><th scope="col">Verification</th><th scope="col">{recent ? "Added" : "Updated"}</th><th scope="col">Actions</th></tr></thead>
+          <thead><tr>{selection && <th scope="col" className="a-select-column">{selectionHeader}</th>}<th scope="col">Venue</th>{showCity && <th scope="col">City</th>}<th scope="col">Publication</th><th scope="col">Phone</th><th scope="col" className="a-numeric">Photos</th><th scope="col">Verification</th><th scope="col">{recent ? "Added" : "Updated"}</th><th scope="col">Actions</th></tr></thead>
           <tbody>{venues.map((venue) => {
             const edit = `/admin/venues/${encodeURIComponent(venue.id)}`;
             const date = recent ? venue.created_at : venue.updated_at;
             return (
               <tr key={venue.id}>
+                {selection && <td className="a-select-column">{selection(venue)}</td>}
                 <th scope="row"><Link className="a-table-name" href={edit} prefetch={false}>{venue.name}</Link><span className="a-table-secondary">{VENUE_TYPE_LABELS[venue.venue_type]}{venue.locality ? ` · ${venue.locality}` : ""}</span></th>
                 {showCity && <td><Link className="a-table-action" href={`/admin/cities/${encodeURIComponent(venue.city.slug)}`} prefetch={false}>{venue.city.name}</Link></td>}
                 <td><StatusBadge status={venue.status} />{venue.status === "published" && venue.city.status !== "active" && <span className="a-table-secondary">City is not active</span>}</td>
